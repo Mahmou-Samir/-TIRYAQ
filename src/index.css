@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* إعدادات الخط والألوان العامة */
+body {
+  /* هنا بنقوله: في العادي خد لون فاتح، وفي الدارك خد لون غامق */
+  @apply bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text transition-colors duration-300;
+}
+
+/* تخصيص السكرول بار عشان يبقى شكله شيك */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-700 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-600;
+}
+
+/* المفروض يكون في src/index.css */
+::-webkit-scrollbar {
+  width: 8px; /* رفيع وشيك */
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* رصاصي فاتح */
+  border-radius: 10px;
+}
+/* للوضع الليلي */
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569; /* رصاصي غامق */
+}
+
+@media print {
+  body * {
+    visibility: hidden; /* اخفي كل حاجة */
+  }
+  /* اظهر بس ورقة التقرير */
+  .bg-white.text-black, .bg-white.text-black * {
+    visibility: visible;
+  }
+  .bg-white.text-black {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+    box-shadow: none;
+  }
+}
