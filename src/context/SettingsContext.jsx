@@ -1,33 +1,53 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-
-// 👇 1. تم تعديل المسار ليقرأ من utils بدلاً من data
 import { translations } from '../utils/translations';
 
 const SettingsContext = createContext();
 
 export const SettingsProvider = ({ children }) => {
-  // 2. قراءة الإعدادات المحفوظة (localStorage) عشان تفضل ثابتة بعد الريفريش
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+  
+  // 1. تحديد الثيم المبدئي (نحترم إعدادات جهاز المستخدم لو مفيش حاجة محفوظة)
+  const getInitialTheme = () => {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) return savedTheme;
+    
+    // لو مفيش، نشوف إعدادات الجهاز
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  };
+
+  const [theme, setTheme] = useState(getInitialTheme);
   const [lang, setLang] = useState(() => localStorage.getItem('lang') || 'ar');
 
-  // تحديد نصوص الترجمة الحالية
-  const t = translations[lang];
+  // التأكد من وجود الترجمة لتجنب الانهيار
+  const t = translations[lang] || translations['ar'];
 
-  // تأثير تغيير اللغة والاتجاه
+  // 2. تأثير تغيير اللغة + تغيير الخط
   useEffect(() => {
-    document.dir = lang === 'ar' ? 'rtl' : 'ltr';
-    document.documentElement.lang = lang;
-    localStorage.setItem('lang', lang); // حفظ اللغة
+    const root = document.documentElement;
+    root.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    root.lang = lang;
+    
+    // تغيير الخط ديناميكياً (تجميلية قوية جداً)
+    if (lang === 'ar') {
+      document.body.style.fontFamily = "'Cairo', sans-serif"; // تأكد إنك مستدعي الخط في index.html
+    } else {
+      document.body.style.fontFamily = "'Inter', sans-serif";
+    }
+
+    localStorage.setItem('lang', lang);
   }, [lang]);
 
-  // تأثير تغيير الثيم (Dark/Light)
+  // 3. تأثير تغيير الثيم
   useEffect(() => {
+    const root = document.documentElement;
     if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
+      root.classList.add('dark');
     } else {
-      document.documentElement.classList.remove('dark');
+      root.classList.remove('dark');
     }
-    localStorage.setItem('theme', theme); // حفظ الثيم
+    localStorage.setItem('theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {

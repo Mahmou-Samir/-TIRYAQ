@@ -3,35 +3,35 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { SettingsProvider } from './context/SettingsContext';
 
 // 1. Pages (General & Auth)
-import Home from './pages/Home';
+import Landing from './pages/Landing'; // ✅ تم التعديل: Landing بدلاً من Home
 import Login from './pages/Login';
 import Register from './pages/Register';
 
-// 2. Pages (Admin Dashboard)
-import Dashboard from './pages/Dashboard';
-import Inventory from './pages/Inventory';
-import Logistics from './pages/Logistics';
-import Alerts from './pages/Alerts';
-import Reports from './pages/Reports';
-import Predictions from './pages/Predictions';
-import Settings from './pages/Settings';
-import Profile from './pages/Profile'; // 👈 ده بروفايل الأدمن (Admin Profile)
+// 2. Admin Pages
+import Dashboard from './pages/admin/Dashboard';
+import Inventory from './pages/admin/Inventory';
+import Logistics from './pages/admin/Logistics';
+import Alerts from './pages/admin/Alerts';
+import Reports from './pages/admin/Reports';
+import Predictions from './pages/admin/Predictions';
+import Settings from './pages/admin/Settings';
+import AdminProfile from './pages/admin/Profile'; 
 
-// 3. Pages (Patient)
+// 3. Patient Pages
 import PatientLayout from './components/layout/PatientLayout';
-import PatientHome from './pages/patient/Home';
+import PatientSearch from './pages/patient/PatientSearch'; // ✅ تم التعديل: اسم واضح جداً
 import PatientOrders from './pages/patient/Orders';
-import PatientProfile from './pages/patient/Profile'; // 🟢 هام: استيراد بروفايل المريض الجديد
+import PatientProfile from './pages/patient/Profile'; 
 
-// 4. Pages (Pharmacy)
+// 4. Pharmacy Pages
 import UploadStock from './pages/pharmacy/UploadStock';
 
-// 5. Layouts & Components
-import Layout from './components/layout/Layout'; // Admin Layout
+// 5. Layouts
+import Layout from './components/layout/Layout'; 
 import PharmacyLayout from './components/layout/PharmacyLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
-// مكون بسيط للوحة تحكم الصيدلية (مؤقت)
+// Pharmacy Dashboard Component
 const PharmacyDashboard = () => (
   <div className="p-10 text-center">
     <h2 className="text-2xl font-bold text-slate-700">مرحباً بك في بوابة الصيدليات 👋</h2>
@@ -44,12 +44,12 @@ const App = () => {
     <SettingsProvider>
       <Routes>
         
-        {/* ------------------- المسارات العامة ------------------- */}
-        <Route path="/" element={<Home />} />
+        {/* الصفحة الرئيسية العامة */}
+        <Route path="/" element={<Landing />} /> {/* ✅ استخدام Landing */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* ------------------- مسارات المسؤول (Admin) ------------------- */}
+        {/* مسارات الأدمن */}
         <Route path="/admin" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <Layout />
@@ -62,37 +62,33 @@ const App = () => {
           <Route path="reports" element={<Reports />} />
           <Route path="predictions" element={<Predictions />} />
           <Route path="settings" element={<Settings />} />
-          <Route path="profile" element={<Profile />} /> {/* بروفايل الأدمن */}
+          <Route path="profile" element={<AdminProfile />} />
         </Route>
 
-        {/* ------------------- مسارات الصيدلية (Pharmacy) ------------------- */}
+        {/* مسارات الصيدلية */}
         <Route path="/pharmacy" element={
           <ProtectedRoute allowedRoles={['pharmacy']}>
             <PharmacyLayout />
           </ProtectedRoute>
         }>
           <Route index element={<PharmacyDashboard />} />
-          <Route path="stock" element={<div className="p-10">صفحة مخزوني (قريباً)</div>} />
+          <Route path="stock" element={<div className="p-10">صفحة مخزوني</div>} />
           <Route path="upload" element={<UploadStock />} />
-          <Route path="orders" element={<div className="p-10">صفحة الطلبات (قريباً)</div>} />
+          <Route path="orders" element={<div className="p-10">صفحة الطلبات</div>} />
         </Route>
 
-        {/* ------------------- مسارات المريض (Patient) ------------------- */}
+        {/* مسارات المريض */}
         <Route path="/patient" element={
           <ProtectedRoute allowedRoles={['patient']}>
             <PatientLayout />
           </ProtectedRoute>
         }>
-          <Route index element={<PatientHome />} />          
+          <Route index element={<PatientSearch />} /> {/* ✅ استخدام PatientSearch */}         
           <Route path="orders" element={<PatientOrders />} /> 
-          
-          {/* 🟢 هنا التعديل: ربطنا صفحة البروفايل الحقيقية */}
           <Route path="profile" element={<PatientProfile />} />
-          
-          <Route path="history" element={<div className="p-10 text-center pt-32">سجل العمليات (قريباً)</div>} />
+          <Route path="history" element={<div className="p-10 text-center pt-32">سجل العمليات</div>} />
         </Route>
 
-        {/* ------------------- Fallback (أي رابط خطأ) ------------------- */}
         <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>

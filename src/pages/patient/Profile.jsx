@@ -1,61 +1,87 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
-  User, MapPin, CreditCard, FileText, Bell, Shield, 
-  HelpCircle, LogOut, ChevronRight, Edit2, Wallet, 
-  Gift, Heart, Moon, Globe, Copy, Check, Loader2, Phone 
+  User, MapPin, CreditCard, Bell, Shield, 
+  HelpCircle, LogOut, ChevronRight, Camera, 
+  Trash2, Plus, X, Sun, Moon, Globe, Gift, 
+  Wallet, Phone, Loader2, Check
 } from 'lucide-react';
-import { getAuth, signOut } from 'firebase/auth';
-import { useNavigate } from 'react-router-dom';
-import { useSettings } from '../../context/SettingsContext'; // استيراد الإعدادات
+import { motion, AnimatePresence } from 'framer-motion';
 
-// --- Custom Styles ---
-const customStyles = `
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-  .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
-  .animate-slide-down { animation: slideDown 0.3s ease-out forwards; }
-  
-  /* Toggle Switch Style */
-  .toggle-checkbox:checked {
-    right: 0;
-    border-color: #3b82f6;
-  }
-  .toggle-checkbox:checked + .toggle-label {
-    background-color: #3b82f6;
-  }
-`;
+// --- Sub-Components ---
+
+const Toast = ({ message, type }) => (
+  <motion.div 
+    initial={{ opacity: 0, y: -50, x: '-50%' }}
+    animate={{ opacity: 1, y: 0, x: '-50%' }}
+    exit={{ opacity: 0, y: -20, x: '-50%' }}
+    className={`fixed top-6 left-1/2 z-[200] px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 ${type === 'success' ? 'bg-green-600' : 'bg-slate-800'} text-white`}
+  >
+    {type === 'success' ? <Check size={18}/> : <Bell size={18}/>}
+    <span className="text-sm font-bold">{message}</span>
+  </motion.div>
+);
+
+const Modal = ({ title, isOpen, onClose, children }) => (
+  <AnimatePresence>
+    {isOpen && (
+      <div className="fixed inset-0 z-[150] flex items-center justify-center px-4">
+        <motion.div 
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}
+        ></motion.div>
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+          className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-2xl max-h-[80vh] overflow-y-auto"
+        >
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white">{title}</h2>
+            <button onClick={onClose} className="p-2 text-slate-400"><X size={20}/></button>
+          </div>
+          {children}
+        </motion.div>
+      </div>
+    )}
+  </AnimatePresence>
+);
+
+// --- Main Component ---
 
 const Profile = () => {
-  const auth = getAuth();
-  const user = auth.currentUser;
-  const navigate = useNavigate();
-  const { theme, toggleTheme, lang, toggleLang } = useSettings(); // استخدام الكونتكست الحقيقي
+  // --- States ---
+  const [user] = useState({
+    displayName: 'محمود أحمد',
+    email: 'mahmoud@example.com',
+    phone: '01012345678',
+    photoURL: null,
+    loyaltyPoints: 1250,
+    walletBalance: 450.00
+  });
 
-  // States
-  const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
-  const [loadingLogout, setLoadingLogout] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [addresses] = useState([
+    { id: 1, label: 'المنزل', details: 'شارع التحرير، الدقي، الجيزة', isDefault: true },
+    { id: 2, label: 'العمل', details: 'القرية الذكية، طريق مصر إسكندرية الصحراوي', isDefault: false }
+  ]);
+
+  const [paymentMethods] = useState([
+    { id: 1, type: 'Visa', last4: '4215', expiry: '12/26' }
+  ]);
+
+  const [settings, setSettings] = useState({
+    theme: 'light',
+    lang: 'ar',
+    notifications: true
+  });
+
+  const [activeModal, setActiveModal] = useState(null); // 'edit-profile', 'addresses', 'payments'
+  const [toast, setToast] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // --- Actions ---
-  const showToast = (message, type = 'info') => {
-    setToast({ show: true, message, type });
-    setTimeout(() => setToast({ ...toast, show: false }), 3000);
-  };
-
-  const handleLogout = async () => {
-    setLoadingLogout(true);
-    try {
-      // محاكاة تأخير بسيط لتجربة مستخدم أفضل
-      setTimeout(async () => {
-        await signOut(auth);
-        navigate('/login');
-      }, 800);
-    } catch (error) {
-      console.error("Error logging out:", error);
-      setLoadingLogout(false);
-    }
-  };
+  // --- Handlers ---
+  const showToast = useCallback((message, type = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText("TIRYAQ-2025");
@@ -64,228 +90,284 @@ const Profile = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const openSupport = () => {
-    window.open("https://wa.me/201000000000", "_blank"); // ربط بواتساب
+  const handleUpdateProfile = (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      showToast("تم تحديث البيانات بنجاح", "success");
+      setLoading(false);
+      setActiveModal(null);
+    }, 1000);
   };
 
-  // --- Menu Data Structure ---
+  const handleLogout = () => {
+    setLoading(true);
+    setTimeout(() => {
+      showToast("تم تسجيل الخروج بنجاح", "info");
+      setLoading(false);
+    }, 1000);
+  };
+
+  // --- Menu Data ---
   const menuGroups = [
     {
       title: "الحساب الشخصي",
       items: [
-        { 
-          icon: User, 
-          label: "تعديل البيانات", 
-          desc: "الاسم، كلمة المرور", 
-          color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
-          action: () => showToast("سيتم فتح نموذج التعديل قريباً", "info")
-        },
-        { 
-          icon: MapPin, 
-          label: "عناويني المسجلة", 
-          desc: "المنزل، العمل", 
-          color: "text-orange-600 bg-orange-50 dark:bg-orange-900/20",
-          action: () => showToast("جاري تحميل الخريطة...", "info")
-        },
-        { 
-          icon: CreditCard, 
-          label: "طرق الدفع", 
-          desc: "**** 4215", 
-          color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20",
-          action: () => showToast("إدارة البطاقات البنكية", "info")
-        },
+        { icon: User, label: "تعديل البيانات", desc: "الاسم، الهاتف، الصورة", color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20", action: () => setActiveModal('edit-profile') },
+        { icon: MapPin, label: "عناويني المسجلة", desc: `${addresses.length} عناوين مسجلة`, color: "text-orange-600 bg-orange-50 dark:bg-orange-900/20", action: () => setActiveModal('addresses') },
+        { icon: CreditCard, label: "طرق الدفع", desc: paymentMethods.length > 0 ? `Visa **** ${paymentMethods[0].last4}` : "أضف بطاقة دفع", color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20", action: () => setActiveModal('payments') },
       ]
     },
     {
       title: "تفضيلات التطبيق",
       items: [
         { 
-          icon: Moon, 
+          icon: settings.theme === 'dark' ? Sun : Moon, 
           label: "الوضع الليلي", 
-          desc: theme === 'dark' ? "مفعل" : "معطل", 
+          desc: settings.theme === 'dark' ? "مفعل" : "معطل", 
           color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20",
           type: "toggle",
-          value: theme === 'dark',
-          action: toggleTheme
+          value: settings.theme === 'dark',
+          action: () => setSettings(s => ({ ...s, theme: s.theme === 'dark' ? 'light' : 'dark' }))
         },
         { 
           icon: Globe, 
           label: "اللغة / Language", 
-          desc: lang === 'ar' ? "العربية" : "English", 
+          desc: settings.lang === 'ar' ? "العربية" : "English", 
           color: "text-teal-600 bg-teal-50 dark:bg-teal-900/20",
-          action: toggleLang
+          action: () => setSettings(s => ({ ...s, lang: s.lang === 'ar' ? 'en' : 'ar' }))
         },
         { 
           icon: Bell, 
           label: "الإشعارات", 
-          desc: notificationsEnabled ? "مفعلة" : "صامت", 
+          desc: settings.notifications ? "مفعلة" : "صامت", 
           color: "text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20",
           type: "toggle",
-          value: notificationsEnabled,
-          action: () => setNotificationsEnabled(!notificationsEnabled)
+          value: settings.notifications,
+          action: () => setSettings(s => ({ ...s, notifications: !s.notifications }))
         },
       ]
     },
     {
       title: "الدعم والأمان",
       items: [
-        { 
-          icon: HelpCircle, 
-          label: "الدعم الفني", 
-          desc: "تواصل معنا 24/7", 
-          color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-900/20",
-          action: openSupport
-        },
-        { 
-          icon: Shield, 
-          label: "سياسة الخصوصية", 
-          desc: "الشروط والأحكام", 
-          color: "text-slate-600 bg-slate-50 dark:bg-slate-800",
-          action: () => window.open("#", "_blank")
-        },
+        { icon: HelpCircle, label: "الدعم الفني", desc: "تواصل معنا 24/7", color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-900/20", action: () => window.open("https://wa.me/201000000000", "_blank") },
+        { icon: Shield, label: "سياسة الخصوصية", desc: "الشروط والأحكام", color: "text-slate-600 bg-slate-50 dark:bg-slate-800", action: () => showToast("سيتم عرض السياسة قريباً") },
       ]
     }
   ];
 
   return (
-    <div className="animate-fade-in pb-28 font-sans">
-      <style>{customStyles}</style>
+    <div className={`min-h-screen ${settings.theme === 'dark' ? 'dark bg-[#020617]' : 'bg-[#F8FAFC]'} font-sans pb-32 transition-colors duration-500`} dir="rtl">
       
-      {/* 🔮 Toast Notification */}
-      {toast.show && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-slide-down px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 ${toast.type === 'success' ? 'bg-green-600' : 'bg-slate-800'} text-white transition-all`}>
-          {toast.type === 'success' ? <Check size={18}/> : <Bell size={18}/>}
-          <span className="text-sm font-bold">{toast.message}</span>
-        </div>
-      )}
+      {/* 🔮 Toast System */}
+      <AnimatePresence>
+        {toast && <Toast {...toast} />}
+      </AnimatePresence>
 
-      {/* 🟢 1. Header Card */}
-      <div className="relative mb-6">
-        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-b-[2.5rem] shadow-lg"></div>
+      {/* 🟢 Header Card */}
+      <div className="relative mb-8">
+        <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-b-[3rem] shadow-lg"></div>
         
-        <div className="relative px-6 pt-16 text-center">
+        <div className="relative px-6 pt-20 text-center">
           {/* Avatar */}
-          <div className="relative inline-block group cursor-pointer" onClick={() => showToast("فتح الصورة الشخصية")}>
-            <div className="w-28 h-28 p-1 bg-white dark:bg-slate-900 rounded-full shadow-xl mx-auto overflow-hidden transition-transform duration-300 group-hover:scale-105">
-              <div className="w-full h-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex items-center justify-center">
-                {user?.photoURL ? (
+          <div className="relative inline-block group">
+            <div className="w-32 h-32 p-1.5 bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl mx-auto overflow-hidden transition-transform duration-300 group-hover:scale-105">
+              <div className="w-full h-full bg-slate-100 dark:bg-slate-800 rounded-[2.2rem] overflow-hidden flex items-center justify-center">
+                {user.photoURL ? (
                   <img src={user.photoURL} alt="User" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-4xl font-bold text-slate-400 select-none">{user?.displayName?.charAt(0).toUpperCase()}</span>
+                  <User size={48} className="text-slate-300" />
                 )}
               </div>
             </div>
-            <button className="absolute bottom-1 right-1 bg-blue-600 text-white p-2 rounded-full shadow-lg border-2 border-white dark:border-slate-900 hover:bg-blue-700 transition-colors">
-              <Edit2 size={14} />
+            <button 
+              onClick={() => setActiveModal('edit-profile')}
+              className="absolute bottom-1 right-1 bg-blue-600 text-white p-2.5 rounded-2xl shadow-lg border-4 border-white dark:border-slate-900 hover:bg-blue-700 transition-colors"
+            >
+              <Camera size={16} />
             </button>
           </div>
 
           {/* Info */}
-          <div className="mt-3">
-            <h1 className="text-2xl font-black text-slate-800 dark:text-white">{user?.displayName || 'ضيف ترياق'}</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium dir-ltr">{user?.email}</p>
+          <div className="mt-4">
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white">{user.displayName}</h1>
+            <p className="text-sm text-slate-400 font-bold mt-1">{user.email}</p>
           </div>
 
-          {/* Stats Row (Interactive) */}
-          <div className="grid grid-cols-2 gap-4 mt-6">
-            <div onClick={handleCopyCode} className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-3 cursor-pointer active:scale-95 transition-transform group relative overflow-hidden">
-              {copied && <div className="absolute inset-0 bg-green-500/10 flex items-center justify-center text-green-600 text-xs font-bold">تم النسخ!</div>}
-              <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/20 text-orange-600 flex items-center justify-center">
-                {copied ? <Check size={20}/> : <Gift size={20} />}
+          {/* Stats Row */}
+          <div className="grid grid-cols-2 gap-4 mt-8">
+            <motion.div 
+              whileTap={{ scale: 0.95 }}
+              onClick={handleCopyCode} 
+              className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-white/5 flex items-center gap-4 cursor-pointer relative overflow-hidden"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 flex items-center justify-center">
+                <Gift size={24} />
               </div>
               <div className="text-right">
-                <p className="text-xs text-slate-400 font-bold">نقاط الولاء</p>
-                <p className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-1">
-                  1,250 <Copy size={12} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity"/>
-                </p>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">نقاط الولاء</p>
+                <p className="text-lg font-black text-slate-900 dark:text-white">{user.loyaltyPoints.toLocaleString()}</p>
               </div>
-            </div>
+              {copied && <div className="absolute inset-0 bg-green-500/10 flex items-center justify-center text-green-600 text-xs font-black">تم النسخ!</div>}
+            </motion.div>
 
-            <div onClick={() => showToast("رصيدك الحالي 450 ج.م")} className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-3 cursor-pointer active:scale-95 transition-transform">
-              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center">
-                <Wallet size={20} />
+            <motion.div 
+              whileTap={{ scale: 0.95 }}
+              onClick={() => showToast(`رصيدك الحالي: ${user.walletBalance} ج.م`)}
+              className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-white/5 flex items-center gap-4 cursor-pointer"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center">
+                <Wallet size={24} />
               </div>
               <div className="text-right">
-                <p className="text-xs text-slate-400 font-bold">المحفظة</p>
-                <p className="text-lg font-black text-slate-800 dark:text-white">450 ج.م</p>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">المحفظة</p>
+                <p className="text-lg font-black text-slate-900 dark:text-white">{user.walletBalance.toFixed(2)}</p>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </div>
 
-      {/* 🟢 2. Settings Groups (Dynamic) */}
-      <div className="px-6 space-y-6">
+      {/* 🟢 Settings Groups */}
+      <div className="px-6 space-y-8">
         {menuGroups.map((group, index) => (
           <div key={index}>
-            <h3 className="text-sm font-bold text-slate-400 mb-3 px-2">{group.title}</h3>
-            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+            <h3 className="text-xs font-black text-slate-400 mb-4 px-2 uppercase tracking-widest">{group.title}</h3>
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-white/5 overflow-hidden">
               {group.items.map((item, i) => (
                 <div key={i}>
                   <div 
                     onClick={item.type === 'toggle' ? undefined : item.action}
-                    className={`w-full p-4 flex items-center justify-between transition-colors ${item.type !== 'toggle' ? 'hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer active:bg-slate-100 dark:active:bg-slate-700' : ''}`}
+                    className={`w-full p-5 flex items-center justify-between transition-all ${item.type !== 'toggle' ? 'hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer active:scale-[0.98]' : ''}`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.color}`}>
-                        <item.icon size={20} />
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${item.color}`}>
+                        <item.icon size={22} />
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold text-slate-700 dark:text-white">{item.label}</p>
-                        {item.desc && <p className="text-[10px] text-slate-400 mt-0.5">{item.desc}</p>}
+                        <p className="text-sm font-black text-slate-800 dark:text-white">{item.label}</p>
+                        <p className="text-[10px] text-slate-400 font-bold mt-0.5">{item.desc}</p>
                       </div>
                     </div>
 
-                    {/* Conditional Rendering based on Type */}
                     {item.type === 'toggle' ? (
-                      <div className="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
-                        <input 
-                          type="checkbox" 
-                          name="toggle" 
-                          id={`toggle-${index}-${i}`} 
-                          className="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300"
-                          style={{ top: '4px', left: item.value ? '20px' : '4px', borderColor: 'transparent' }}
-                          checked={item.value}
-                          onChange={item.action}
+                      <button 
+                        onClick={item.action}
+                        className={`w-12 h-7 rounded-full transition-colors relative ${item.value ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-800'}`}
+                      >
+                        <motion.div 
+                          animate={{ x: item.value ? -20 : -4 }}
+                          className="absolute top-1 right-0 w-5 h-5 bg-white rounded-full shadow-sm"
                         />
-                        <label 
-                          htmlFor={`toggle-${index}-${i}`} 
-                          className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors duration-300 ${item.value ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}
-                        ></label>
-                      </div>
+                      </button>
                     ) : (
-                      <ChevronRight size={18} className="text-slate-300 rtl:rotate-180" />
+                      <ChevronRight size={18} className="text-slate-300" />
                     )}
                   </div>
-                  {/* Divider */}
-                  {i < group.items.length - 1 && <div className="h-px bg-slate-100 dark:bg-slate-800 mx-16"></div>}
+                  {i < group.items.length - 1 && <div className="h-px bg-slate-50 dark:bg-white/5 mx-6"></div>}
                 </div>
               ))}
             </div>
           </div>
         ))}
 
-        {/* 🟢 3. Logout Button (With Loading) */}
+        {/* 🟢 Logout Button */}
         <button 
           onClick={handleLogout} 
-          disabled={loadingLogout}
-          className="w-full bg-red-50 dark:bg-red-900/10 p-4 rounded-3xl border border-red-100 dark:border-red-900/30 flex items-center justify-center gap-3 group active:scale-95 transition-transform disabled:opacity-70 disabled:cursor-not-allowed"
+          disabled={loading}
+          className="w-full bg-red-50 dark:bg-red-500/10 p-5 rounded-[2rem] border border-red-100 dark:border-red-900/30 flex items-center justify-center gap-3 group active:scale-95 transition-all disabled:opacity-70"
         >
-          {loadingLogout ? (
+          {loading ? (
             <Loader2 size={20} className="text-red-500 animate-spin" />
           ) : (
             <>
-              <LogOut size={20} className="text-red-500 group-hover:scale-110 transition-transform" />
-              <span className="font-bold text-sm text-red-600 dark:text-red-400">تسجيل الخروج من التطبيق</span>
+              <LogOut size={20} className="text-red-500 group-hover:translate-x-1 transition-transform" />
+              <span className="font-black text-sm text-red-600 dark:text-red-400">تسجيل الخروج من التطبيق</span>
             </>
           )}
         </button>
 
-        {/* Version Info */}
-        <p className="text-center text-[10px] text-slate-300 dark:text-slate-600 font-mono pt-4 pb-8">
-          Tiryaq App v2.4.0 (Build 2025)
+        <p className="text-center text-[10px] text-slate-300 dark:text-slate-600 font-black pt-4 pb-8 uppercase tracking-widest">
+          Tiryaq App v2.5.0 • 2026
         </p>
       </div>
+
+      {/* 🟢 Modals */}
+      
+      {/* Edit Profile Modal */}
+      <Modal title="تعديل البيانات" isOpen={activeModal === 'edit-profile'} onClose={() => setActiveModal(null)}>
+        <form onSubmit={handleUpdateProfile} className="space-y-5">
+          <div className="space-y-2">
+            <label className="text-xs font-black text-slate-400 px-1">الاسم الكامل</label>
+            <div className="relative">
+              <User className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input 
+                type="text" defaultValue={user.displayName}
+                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-4 pr-12 pl-4 text-sm font-bold focus:ring-2 focus:ring-blue-600 transition-all"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-black text-slate-400 px-1">رقم الهاتف</label>
+            <div className="relative">
+              <Phone className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input 
+                type="tel" defaultValue={user.phone}
+                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-4 pr-12 pl-4 text-sm font-bold focus:ring-2 focus:ring-blue-600 transition-all"
+              />
+            </div>
+          </div>
+          <button type="submit" disabled={loading} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-600/20 mt-4">
+            {loading ? <Loader2 className="animate-spin mx-auto" size={20}/> : "حفظ التغييرات"}
+          </button>
+        </form>
+      </Modal>
+
+      {/* Addresses Modal */}
+      <Modal title="عناويني" isOpen={activeModal === 'addresses'} onClose={() => setActiveModal(null)}>
+        <div className="space-y-4">
+          {addresses.map(addr => (
+            <div key={addr.id} className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl flex justify-between items-center">
+              <div className="flex gap-3">
+                <div className="w-10 h-10 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
+                  <MapPin size={20} />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-800 dark:text-white">{addr.label}</p>
+                  <p className="text-[10px] text-slate-400 font-bold">{addr.details}</p>
+                </div>
+              </div>
+              <button className="text-red-400 p-2"><Trash2 size={18}/></button>
+            </div>
+          ))}
+          <button className="w-full py-4 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl text-slate-400 font-black flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors">
+            <Plus size={18} /> إضافة عنوان جديد
+          </button>
+        </div>
+      </Modal>
+
+      {/* Payments Modal */}
+      <Modal title="طرق الدفع" isOpen={activeModal === 'payments'} onClose={() => setActiveModal(null)}>
+        <div className="space-y-4">
+          {paymentMethods.map(pm => (
+            <div key={pm.id} className="p-5 bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl text-white relative overflow-hidden">
+              <div className="relative z-10">
+                <p className="text-[10px] font-black opacity-60 mb-4">{pm.type}</p>
+                <p className="text-lg font-black tracking-widest mb-4">**** **** **** {pm.last4}</p>
+                <div className="flex justify-between items-end">
+                  <p className="text-xs font-bold opacity-80">EXPIRES: {pm.expiry}</p>
+                  <CreditCard size={24} className="opacity-40" />
+                </div>
+              </div>
+              <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white/5 rounded-full"></div>
+            </div>
+          ))}
+          <button className="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black flex items-center justify-center gap-2">
+            <Plus size={18} /> إضافة بطاقة جديدة
+          </button>
+        </div>
+      </Modal>
 
     </div>
   );
