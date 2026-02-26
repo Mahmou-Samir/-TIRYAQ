@@ -1,91 +1,77 @@
 import React, { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { 
-  Store, Upload, ShoppingCart, LogOut, LayoutGrid, Bell, Search, User 
-} from 'lucide-react';
-import { getAuth, signOut } from 'firebase/auth';
+import { Outlet, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// ✅ استيراد المكونات الفرعية
+import PharmacySidebar from './PharmacySidebar';
+import PharmacyHeader from './PharmacyHeader'; 
 
 const PharmacyLayout = () => {
-  const navigate = useNavigate();
-  const auth = getAuth();
-  
-  const handleLogout = async () => {
-    await signOut(auth);
-    navigate('/login');
-  };
-
-  const navItems = [
-    { path: '/pharmacy', name: 'نظرة عامة', icon: <LayoutGrid size={20} /> },
-    { path: '/pharmacy/stock', name: 'مخزوني', icon: <Store size={20} /> },
-    { path: '/pharmacy/upload', name: 'رفع شيت إكسيل', icon: <Upload size={20} /> },
-    { path: '/pharmacy/orders', name: 'طلبات التوريد', icon: <ShoppingCart size={20} /> },
-  ];
+  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const location = useLocation(); // نحتاجه لعمل مفتاح فريد للانيميشن
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-cairo text-right" dir="rtl">
+    <div className="relative min-h-screen bg-[#f8fafc] dark:bg-[#020617] flex font-sans selection:bg-emerald-500/30 overflow-hidden" dir="rtl">
       
-      {/* Sidebar للصيدلية */}
-      <aside className="w-64 bg-white border-l border-gray-200 hidden md:flex flex-col">
-        <div className="h-20 flex items-center px-6 border-b border-gray-100">
-          <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white ml-3">
-            <Store size={18} />
-          </div>
-          <h1 className="font-bold text-lg text-slate-800">بوابة الصيدليات</h1>
-        </div>
+      {/* 🌌 1. الخلفية الحية (Ambient Background Layer) */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        {/* نويز خفيف ليعطي ملمس احترافي */}
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+        
+        {/* فقاعات ضوئية (Aurora Blobs) */}
+        <div className="absolute -top-[10%] -right-[10%] w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-[100px] animate-pulse"></div>
+        <div className="absolute top-[40%] -left-[10%] w-[500px] h-[500px] bg-teal-500/10 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[20%] w-[400px] h-[400px] bg-green-500/10 rounded-full blur-[80px]"></div>
+      </div>
 
-        <nav className="p-4 space-y-2 flex-1">
-          {navItems.map((item) => (
-            <NavLink 
-              key={item.path} 
-              to={item.path}
-              end={item.path === '/pharmacy'}
-              className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                isActive ? 'bg-green-50 text-green-700 font-bold' : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              {item.icon}
-              {item.name}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="p-4 border-t border-gray-100">
-          <button onClick={handleLogout} className="flex items-center gap-3 w-full px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl transition-all font-bold">
-            <LogOut size={20} /> تسجيل خروج
-          </button>
-        </div>
+      {/* 🟢 2. Sidebar (Glassmorphism Style) */}
+      <aside 
+        className={`
+          fixed top-0 right-0 h-full z-50 
+          bg-white/80 dark:bg-[#0b1121]/90 backdrop-blur-xl 
+          border-l border-white/20 dark:border-white/5 
+          shadow-[0_0_50px_rgba(0,0,0,0.1)]
+          transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]
+          ${isSidebarOpen ? 'w-72' : 'w-24'}
+        `}
+      >
+        <PharmacySidebar isSidebarOpen={isSidebarOpen} />
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col">
-        {/* Header للصيدلية */}
-        <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center justify-between">
-          <div className="relative w-96">
-            <Search className="absolute right-3 top-3 text-gray-400" size={20} />
-            <input type="text" placeholder="بحث في مخزون الصيدلية..." className="w-full bg-slate-50 border-none rounded-xl py-2.5 pr-10 pl-4 focus:ring-2 focus:ring-green-500 transition-all" />
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <button className="p-2 relative bg-slate-50 rounded-xl hover:bg-slate-100">
-              <Bell size={20} className="text-slate-600" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
-            <div className="flex items-center gap-3 pl-2 border-l border-gray-200">
-              <div className="text-left hidden sm:block">
-                <p className="text-sm font-bold text-slate-800">صيدلية د. محمود</p>
-                <p className="text-xs text-slate-500">فرع المعادي</p>
-              </div>
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 border-2 border-white shadow-sm">
-                <User size={20} />
-              </div>
-            </div>
-          </div>
-        </header>
+      {/* 🟢 3. Main Content Wrapper */}
+      <main 
+        className={`
+          relative z-10 flex-1 flex flex-col min-h-screen 
+          transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]
+          ${isSidebarOpen ? 'mr-72' : 'mr-24'}
+        `}
+      >
+        
+        {/* الهيدر */}
+        <PharmacyHeader 
+          toggleSidebar={() => setSidebarOpen(!isSidebarOpen)} 
+          isSidebarOpen={isSidebarOpen} 
+        />
 
-        {/* Page Content */}
-        <div className="p-8 overflow-y-auto">
-          <Outlet />
+        {/* 🟢 4. Dynamic Page Container with Cinematic Transition */}
+        <div className="p-6 md:p-8 flex-1 overflow-x-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname} // مفتاح فريد لإعادة تشغيل الأنيميشن مع كل صفحة
+              initial={{ opacity: 0, y: 20, scale: 0.98, filter: 'blur(10px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -20, scale: 0.98, filter: 'blur(10px)' }}
+              transition={{ 
+                duration: 0.4, 
+                ease: [0.22, 1, 0.36, 1] // Custom Bezier for ultra-smooth feel
+              }}
+              className="h-full"
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
         </div>
+        
       </main>
     </div>
   );
