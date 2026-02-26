@@ -1,127 +1,213 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Package, AlertTriangle, Truck, Activity, Send, 
-  Calendar, MoreVertical 
+  Calendar, MoreVertical, ShieldAlert, Navigation, Clock,
+  CheckCircle2, X
 } from 'lucide-react';
 import { useSettings } from '../../context/SettingsContext';
+import { motion, AnimatePresence, useMotionTemplate, useMotionValue } from 'framer-motion';
 
-// Components
+// Components (تأكد من تحديث StatCard لاستخدام NextGenStatCard الذي أعطيته لك سابقاً إذا أردت أقصى فخامة)
 import StatCard from '../../components/dashboard/StatCard';
 import InventoryChart from '../../components/dashboard/InventoryChart'; 
 import DistributionChart from '../../components/dashboard/DistributionChart';
 import ActivityLog from '../../components/dashboard/ActivityLog';
 import EgyptMap from '../../components/maps/EgyptMap';
-import Modal from '../../components/common/Modal';
 
 // Firebase
 import { db } from '../../firebase/config';
-import { collection, onSnapshot, addDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp, query } from 'firebase/firestore';
 
-// 🟢 قائمة المحافظات
 const GOVERNORATES_LIST = [
   "القاهرة", "الإسكندرية", "الجيزة", "القليوبية", "الدقهلية", "الشرقية", "الغربية", "المنوفية", "البحيرة", "كفر الشيخ", 
   "دمياط", "بورسعيد", "الإسماعيلية", "السويس", "شمال سيناء", "جنوب سيناء", "بني سويف", "الفيوم", "المنيا", "أسيوط", 
   "الوادي الجديد", "البحر الأحمر", "سوهاج", "قنا", "الأقصر", "أسوان", "مطروح"
 ];
 
-// 👇 مكون Skeleton Loading
+// --- 🌟 المكون السحري للكروت (Mouse Tracking Glow Container) ---
+const SpatialCard = ({ children, className = "", glowColor = "59, 130, 246" }) => {
+  let mouseX = useMotionValue(0);
+  let mouseY = useMotionValue(0);
+
+  function handleMouseMove({ currentTarget, clientX, clientY }) {
+    let { left, top } = currentTarget.getBoundingClientRect();
+    mouseX.set(clientX - left);
+    mouseY.set(clientY - top);
+  }
+
+  return (
+    <motion.div
+      onMouseMove={handleMouseMove}
+      className={`group relative overflow-hidden rounded-[2.5rem] bg-white/60 dark:bg-[#0b1121]/80 backdrop-blur-3xl border border-slate-200/50 dark:border-white/5 shadow-2xl ${className}`}
+    >
+      {/* إضاءة داخلية تتبع الماوس */}
+      <motion.div
+        className="pointer-events-none absolute -inset-px rounded-[2.5rem] opacity-0 transition-opacity duration-500 group-hover:opacity-100 z-0"
+        style={{
+          background: useMotionTemplate`
+            radial-gradient(
+              400px circle at ${mouseX}px ${mouseY}px,
+              rgba(${glowColor}, 0.12),
+              transparent 80%
+            )
+          `,
+        }}
+      />
+      {/* إضاءة للحدود الخارجية تتبع الماوس */}
+      <motion.div
+        className="pointer-events-none absolute -inset-px rounded-[2.5rem] opacity-0 transition-opacity duration-500 group-hover:opacity-100 z-0"
+        style={{
+          background: useMotionTemplate`
+            radial-gradient(
+              250px circle at ${mouseX}px ${mouseY}px,
+              rgba(${glowColor}, 0.6),
+              transparent 80%
+            )
+          `,
+          WebkitMaskImage: `url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' fill='none' rx='40' stroke='black' stroke-width='2' /%3E%3C/svg%3E")`,
+        }}
+      />
+      <div className="relative z-10 w-full h-full p-6 md:p-8">
+        {children}
+      </div>
+    </motion.div>
+  );
+};
+
+// --- Custom Toast Component ---
+const Toast = ({ message, type }) => (
+  <motion.div 
+    initial={{ opacity: 0, y: -50, scale: 0.9 }}
+    animate={{ opacity: 1, y: 0, scale: 1 }}
+    exit={{ opacity: 0, y: -20, scale: 0.9 }}
+    transition={{ type: "spring", stiffness: 400, damping: 25 }}
+    className={`fixed top-8 left-1/2 -translate-x-1/2 z-[300] px-6 py-4 rounded-[1.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center gap-3 w-[90%] max-w-xs backdrop-blur-2xl border ${
+      type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-400' : 
+      type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400' : 
+      'bg-slate-900/80 border-white/10 text-white'
+    }`}
+  >
+    {type === 'success' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+    <span className="text-xs font-black tracking-wide">{message}</span>
+  </motion.div>
+);
+
+// --- Spatial Modal Sub-Component ---
+const PremiumModal = ({ isOpen, onClose, title, children }) => (
+  <AnimatePresence>
+    {isOpen && (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center px-4">
+        <motion.div 
+          initial={{ opacity: 0, backdropFilter: "blur(0px)" }} 
+          animate={{ opacity: 1, backdropFilter: "blur(20px)" }} 
+          exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+          className="absolute inset-0 bg-[#020617]/60" onClick={onClose}
+        />
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0, y: 20, rotateX: 10 }} 
+          animate={{ scale: 1, opacity: 1, y: 0, rotateX: 0 }} 
+          exit={{ scale: 0.9, opacity: 0, y: 20, rotateX: -10 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className="relative w-full max-w-lg bg-white/90 dark:bg-[#0b1121]/90 backdrop-blur-3xl rounded-[2.5rem] p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/20 dark:border-white/10"
+        >
+          {/* إضاءة داخلية للمودال */}
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-red-500/20 rounded-full blur-3xl pointer-events-none"></div>
+          
+          <div className="flex justify-between items-center mb-8 relative z-10">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3 tracking-tighter">
+              <div className="p-3 bg-red-500/10 rounded-2xl text-red-500 shadow-inner border border-red-500/20"><ShieldAlert size={24}/></div>
+              {title}
+            </h2>
+            <button onClick={onClose} className="p-2.5 bg-slate-100 dark:bg-white/5 rounded-2xl text-slate-500 hover:text-red-500 hover:bg-red-500/10 transition-all"><X size={20}/></button>
+          </div>
+          <div className="relative z-10">
+             {children}
+          </div>
+        </motion.div>
+      </div>
+    )}
+  </AnimatePresence>
+);
+
+// --- Ultra Skeleton ---
 const DashboardSkeleton = () => (
-  <div className="space-y-8 animate-pulse p-4">
-    <div className="h-48 bg-gray-200 dark:bg-slate-700 rounded-3xl w-full"></div>
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-      {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-gray-200 dark:bg-slate-700 rounded-3xl"></div>)}
-    </div>
-    <div className="grid grid-cols-3 gap-8">
-      <div className="col-span-2 h-96 bg-gray-200 dark:bg-slate-700 rounded-3xl"></div>
-      <div className="h-96 bg-gray-200 dark:bg-slate-700 rounded-3xl"></div>
+  <div className="space-y-8 p-4 xl:px-8 xl:py-6">
+    <div className="h-48 bg-slate-200/50 dark:bg-white/5 rounded-[2.5rem] w-full animate-pulse border border-slate-100 dark:border-white/5"></div>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {[1, 2, 3, 4].map(i => <div key={i} className="h-36 bg-slate-200/50 dark:bg-white/5 rounded-[2.5rem] animate-pulse border border-slate-100 dark:border-white/5"></div>)}
     </div>
   </div>
 );
 
+// --- Main Component ---
 const Dashboard = () => {
   const { t, lang } = useSettings();
   
-  // States
   const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [toast, setToast] = useState(null);
 
-  // State البلاغ
-  const [reportData, setReportData] = useState({ 
-    governorate: '', 
-    hospital: '', 
-    drug: '', 
-    priority: 'high' 
-  });
+  const [reportData, setReportData] = useState({ governorate: '', hospital: '', drug: '', priority: 'high' });
 
-  // 1. تحديث الوقت (تنظيف التايمر ضروري)
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const getGreeting = () => {
+  const getGreeting = useCallback(() => {
     const hour = currentTime.getHours();
-    if (hour < 12) return t.greetingMorning;
-    if (hour < 18) return t.greetingEvening;
-    return t.greetingEvening;
-  };
+    if (hour < 12) return t.greetingMorning || 'صباح الخير';
+    if (hour < 18) return t.greetingEvening || 'مساء الخير';
+    return t.greetingEvening || 'مساء الخير';
+  }, [currentTime, t]);
 
-  // 2. جلب البيانات من Firebase (إصلاح الـ Unsubscribe)
-  useEffect(() => {
-    let unsubscribe = () => {};
-
-    try {
-      const q = query(collection(db, "medicines")); // يمكن إضافة orderBy هنا لاحقاً
-      
-      unsubscribe = onSnapshot(q, 
-        (snapshot) => {
-          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setMedicines(data);
-          setLoading(false);
-        }, 
-        (error) => {
-          console.error("Firestore Error:", error);
-          setLoading(false); // إيقاف التحميل حتى لو فشل الاتصال
-        }
-      );
-    } catch (error) {
-      console.error("Connection Error:", error);
-      setLoading(false);
-    }
-
-    // 🟢 التنظيف عند الخروج من الصفحة (أهم خطوة لمنع الأخطاء)
-    return () => unsubscribe();
+  const showToast = useCallback((message, type = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
-  // 3. حسابات الإحصائيات
-  const totalMedicines = medicines.length;
-  const criticalShortages = medicines.filter(m => Number(m.stock) < 50).length;
-  const totalStockValue = medicines.reduce((acc, curr) => acc + (Number(curr.stock) || 0), 0);
+  useEffect(() => {
+    const q = query(collection(db, "medicines"));
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setMedicines(data);
+        setLoading(false);
+      }, 
+      (error) => {
+        console.error("Firestore Error:", error);
+        showToast("فشل في جلب البيانات", "error");
+        setLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, [showToast]);
 
-  // 4. إرسال البلاغ
+  const { totalMedicines, criticalShortages, totalStockValue, criticalItems } = useMemo(() => {
+    const critical = medicines.filter(m => Number(m.stock) < 50);
+    return {
+      totalMedicines: medicines.length,
+      criticalShortages: critical.length,
+      totalStockValue: medicines.reduce((acc, curr) => acc + (Number(curr.stock) || 0), 0),
+      criticalItems: critical
+    };
+  }, [medicines]);
+
   const handleReportSubmit = async (e) => {
     e.preventDefault();
-    if (!navigator.onLine) {
-      alert("لا يوجد اتصال بالإنترنت");
-      return;
-    }
+    if (!navigator.onLine) return showToast("لا يوجد اتصال بالإنترنت", "error");
 
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, "reports"), {
-        ...reportData,
-        status: 'pending',
-        createdAt: serverTimestamp()
-      });
+      await addDoc(collection(db, "reports"), { ...reportData, status: 'pending', createdAt: serverTimestamp() });
       setIsReportModalOpen(false);
       setReportData({ governorate: '', hospital: '', drug: '', priority: 'high' });
-      alert(lang === 'ar' ? "تم إرسال البلاغ بنجاح" : "Report sent successfully");
+      showToast(lang === 'ar' ? "تم إرسال التنبيه العاجل لغرفة العمليات بنجاح." : "Urgent alert sent successfully.", "success");
     } catch (error) {
-      console.error("Error submitting report:", error);
-      alert(t.error || "حدث خطأ أثناء الإرسال");
+      showToast(t.error || "حدث خطأ أثناء الإرسال", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -129,252 +215,271 @@ const Dashboard = () => {
 
   if (loading) return <DashboardSkeleton />;
 
-  return (
-    <div className="space-y-8 animate-fade-in pb-12">
-      
-      {/* 🟢 Header Section */}
-      <div className="flex flex-col lg:flex-row justify-between items-end gap-6 bg-gradient-to-r from-blue-600 to-indigo-700 p-8 rounded-3xl shadow-xl text-white relative overflow-hidden">
-        
-        {/* الخلفية الزخرفية */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-        <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/10 rounded-full -ml-10 -mb-10 blur-xl"></div>
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.1 } }
+  };
+  const itemVariants = {
+    hidden: { opacity: 0, y: 30, scale: 0.95 },
+    show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 25 } }
+  };
 
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 text-blue-100 mb-1">
-            <Calendar size={18} />
-            <span className="text-sm font-medium">
+  return (
+    <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-8 pb-12 pt-6 px-4 md:px-8" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      
+      <AnimatePresence>
+        {toast && <Toast {...toast} />}
+      </AnimatePresence>
+
+      {/* 🔮 Spatial Aurora Hero Header */}
+      <motion.div variants={itemVariants} className="flex flex-col lg:flex-row justify-between items-end gap-6 bg-slate-950 p-8 md:p-12 rounded-[3rem] shadow-2xl border border-white/10 text-white relative overflow-hidden group">
+        
+        {/* Animated Aurora Blobs */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.2, 1], 
+              rotate: [0, 90, 0],
+              x: [0, 100, 0],
+              y: [0, -50, 0]
+            }}
+            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            className="absolute -top-[50%] -right-[20%] w-[800px] h-[800px] bg-indigo-600/30 rounded-full blur-[100px] mix-blend-screen"
+          />
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.5, 1], 
+              rotate: [0, -90, 0],
+              x: [0, -100, 0],
+              y: [0, 50, 0]
+            }}
+            transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+            className="absolute -bottom-[50%] -left-[20%] w-[600px] h-[600px] bg-blue-600/30 rounded-full blur-[120px] mix-blend-screen"
+          />
+        </div>
+        
+        {/* Glass Overlay */}
+        <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px]"></div>
+
+        <div className="relative z-10 w-full lg:w-auto">
+          <div className="flex items-center gap-2 text-blue-200 mb-4 bg-white/5 w-fit px-4 py-2 rounded-full backdrop-blur-xl border border-white/10 shadow-inner">
+            <Clock size={16} className="text-blue-400" />
+            <span className="text-[11px] font-black tracking-widest uppercase">
               {currentTime.toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </span>
           </div>
-          <h1 className="text-4xl font-bold mb-2">
-            {getGreeting()}، <span className="text-blue-200">Admin 👋</span>
+          <h1 className="text-4xl md:text-6xl font-black mb-4 tracking-tighter">
+            {getGreeting()}، <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-white">Admin</span>
           </h1>
-          <p className="text-blue-100 max-w-lg leading-relaxed opacity-90">
+          <p className="text-slate-300 max-w-lg leading-relaxed font-medium text-sm md:text-base">
+             {lang === 'ar' ? `النظام يراقب المستشفيات. لديك ` : `System monitoring active. You have `}
+             <span className="font-black px-2 py-0.5 mx-1 rounded-md bg-red-500/20 border border-red-500/50 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+               {criticalShortages}
+             </span>
              {lang === 'ar' 
-               ? `لديك ${criticalShortages} تنبيهات عاجلة تتطلب انتباهك اليوم.`
-               : `You have ${criticalShortages} urgent alerts requiring attention today.`
-             }
+               ? ` تنبيهات حرجة في سلاسل الإمداد.`
+               : ` critical supply chain alerts.`}
           </p>
         </div>
 
-        <div className="flex gap-3 relative z-10">
-          <div className="text-right hidden sm:block">
-             <div className="text-3xl font-mono font-bold">
+        <div className="flex flex-col sm:flex-row items-center gap-5 relative z-10 w-full lg:w-auto justify-end">
+          <div className="text-right hidden sm:block bg-white/5 p-5 rounded-[2rem] backdrop-blur-xl border border-white/10 shadow-2xl">
+             <div className="text-4xl font-mono font-black tracking-widest text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
                {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
              </div>
-             <div className="text-xs text-blue-200 uppercase tracking-widest">
-               {lang === 'ar' ? 'توقيت القاهرة' : 'Cairo Time'}
+             <div className="text-[10px] text-blue-300 font-black uppercase tracking-[0.3em] mt-2">
+               {lang === 'ar' ? 'توقيت القاهرة' : 'Cairo Time (EET)'}
              </div>
           </div>
-          <button 
+          <motion.button 
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
             onClick={() => setIsReportModalOpen(true)}
-            className="bg-white text-blue-700 hover:bg-blue-50 px-6 py-3 rounded-xl font-bold shadow-lg transition-all flex items-center gap-2 group"
+            className="w-full sm:w-auto bg-gradient-to-r from-red-600 to-rose-600 text-white hover:from-red-500 hover:to-rose-500 px-8 py-5 rounded-[2rem] font-black shadow-[0_0_30px_rgba(225,29,72,0.4)] transition-all flex items-center justify-center gap-3 border border-red-400/30"
           >
-            <AlertTriangle className="group-hover:text-red-500 transition-colors" size={20} />
-            {t.reportEmergency}
-          </button>
+            <ShieldAlert size={24} />
+            {t.reportEmergency || 'إطلاق إنذار نواقص'}
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
 
       {/* 🟢 Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title={t.stats.totalItems} 
-          value={totalMedicines} 
-          icon={<Package size={24} />} 
-          trend="up" trendValue="4.5%" 
-          subtitle={lang === 'ar' ? "صنف مسجل" : "Registered"}
-          color="blue"
-        />
-        <StatCard 
-          title={t.stats.criticalShortage} 
-          value={criticalShortages} 
-          icon={<AlertTriangle size={24} />} 
-          trend={criticalShortages > 0 ? "down" : "neutral"} trendValue={t.urgent} 
-          color="red" 
-          subtitle={lang === 'ar' ? "أقل من 50 عبوة" : "< 50 Units"}
-        />
-        <StatCard 
-          title={t.stats.totalStock} 
-          value={totalStockValue.toLocaleString()} 
-          icon={<Activity size={24} />} 
-          trend="up" trendValue="12%" 
-          subtitle={lang === 'ar' ? "وحدة دواء" : "Units"}
-          color="green"
-        />
-        <StatCard 
-          title={t.stats.incomingShipments} 
-          value="5" 
-          icon={<Truck size={24} />} 
-          trend="up" trendValue={t.stable} 
-          subtitle={lang === 'ar' ? "متوقع غداً" : "Expected Tomorrow"}
-          color="orange"
-        />
-      </div>
+      <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <motion.div variants={itemVariants}>
+          <StatCard title={t.stats?.totalItems || 'إجمالي الأصناف'} value={totalMedicines} icon={<Package size={26} strokeWidth={2}/>} trend="up" trendValue="4.5%" subtitle={lang === 'ar' ? "صنف مسجل" : "Registered"} color="blue"/>
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <StatCard title={t.stats?.criticalShortage || 'نواقص حرجة'} value={criticalShortages} icon={<AlertTriangle size={26} strokeWidth={2}/>} trend={criticalShortages > 0 ? "down" : "neutral"} trendValue={t.urgent || 'عاجل'} color="red" subtitle={lang === 'ar' ? "أصناف تحت حد الخطر" : "Below safety line"}/>
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <StatCard title={t.stats?.totalStock || 'حجم المخزون الفعلي'} value={totalStockValue.toLocaleString()} icon={<Activity size={26} strokeWidth={2}/>} trend="up" trendValue="12%" subtitle={lang === 'ar' ? "وحدة دواء" : "Units"} color="green"/>
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <StatCard title={t.stats?.incomingShipments || 'شحنات قادمة'} value="5" icon={<Truck size={26} strokeWidth={2}/>} trend="up" trendValue={t.stable || 'مستقر'} subtitle={lang === 'ar' ? "أوامر توريد" : "Supply orders"} color="orange"/>
+        </motion.div>
+      </motion.div>
 
       {/* 🟢 Main Content Layout */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         
-        {/* العمود الأيمن */}
+        {/* Right Column (Map & Charts) */}
         <div className="xl:col-span-2 space-y-8">
           
-          {/* Map */}
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm relative overflow-hidden">
-             <div className="flex justify-between items-center mb-6">
-               <div>
-                 <h3 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                   {t.mapTitle}
-                 </h3>
-                 <p className="text-sm text-gray-500">{t.mapSubtitle}</p>
+          {/* Spatial Map Section */}
+          <motion.div variants={itemVariants}>
+            <SpatialCard glowColor="59, 130, 246">
+               <div className="flex justify-between items-start mb-6">
+                 <div>
+                   <h3 className="text-2xl font-black text-slate-800 dark:text-white flex items-center gap-3 tracking-tight">
+                     <div className="p-2.5 bg-blue-500/10 text-blue-500 rounded-xl"><Navigation size={20}/></div>
+                     {t.mapTitle || 'الرادار اللوجستي'}
+                   </h3>
+                   <p className="text-sm text-slate-500 font-medium mt-2">{t.mapSubtitle || 'توزيع المخزون المركزي والمستشفيات التابعة على مستوى الجمهورية'}</p>
+                 </div>
+                 <span className="bg-blue-500/10 border border-blue-500/20 text-blue-500 px-3 py-1.5 rounded-xl text-xs font-black tracking-widest uppercase flex items-center gap-2 shadow-inner">
+                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-ping"></div> LIVE
+                 </span>
                </div>
-             </div>
-             <div className="h-[400px] w-full bg-gray-50 dark:bg-slate-900 rounded-2xl flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-slate-700">
-                <EgyptMap />
-             </div>
-          </div>
+               <div className="h-[450px] w-full bg-slate-50 dark:bg-[#050b14] rounded-[2rem] flex items-center justify-center border border-slate-200/50 dark:border-white/5 relative z-10 overflow-hidden shadow-inner">
+                  <EgyptMap />
+               </div>
+            </SpatialCard>
+          </motion.div>
 
-          {/* Charts Section */}
+          {/* Spatial Charts Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm">
-              <h3 className="font-bold text-gray-800 dark:text-white mb-4">{t.charts.inventoryAnalysis}</h3>
-              {/* 🟢 تحديد ارتفاع ثابت للشارت لحل مشكلة Recharts */}
-              <div className="h-[300px] w-full">
-                 <InventoryChart medicines={medicines} />
-              </div>
-            </div>
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm">
-              <h3 className="font-bold text-gray-800 dark:text-white mb-4">{t.charts.categoryDistribution}</h3>
-              {/* 🟢 تحديد ارتفاع ثابت للشارت */}
-              <div className="h-[300px] w-full">
-                 <DistributionChart medicines={medicines} />
-              </div>
-            </div>
+            <motion.div variants={itemVariants}>
+              <SpatialCard glowColor="59, 130, 246">
+                <h3 className="font-black text-lg text-slate-800 dark:text-white mb-6 flex items-center gap-3">
+                  <div className="p-2 bg-blue-500/10 text-blue-500 rounded-lg"><Activity size={18}/></div>
+                  {t.charts?.inventoryAnalysis || 'تحليل حركة المخزون'}
+                </h3>
+                <div className="h-[300px] w-full"><InventoryChart medicines={medicines} /></div>
+              </SpatialCard>
+            </motion.div>
+
+            <motion.div variants={itemVariants}>
+              <SpatialCard glowColor="168, 85, 247">
+                <h3 className="font-black text-lg text-slate-800 dark:text-white mb-6 flex items-center gap-3">
+                  <div className="p-2 bg-purple-500/10 text-purple-500 rounded-lg"><Package size={18}/></div>
+                  {t.charts?.categoryDistribution || 'التوزيع حسب التصنيف'}
+                </h3>
+                <div className="h-[300px] w-full"><DistributionChart medicines={medicines} /></div>
+              </SpatialCard>
+            </motion.div>
           </div>
         </div>
 
-        {/* العمود الأيسر */}
+        {/* Left Column (Alerts & Logs) */}
         <div className="space-y-8">
           
-          {/* Live Alerts */}
-          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col h-[500px]">
-            <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-700/50">
-              <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                <span className="flex h-3 w-3 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                </span>
-                {t.liveAlerts}
-              </h3>
-              <span className="text-xs font-mono text-gray-400">LIVE</span>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-              {criticalShortages > 0 ? (
-                medicines.filter(m => Number(m.stock) < 50).map((item) => (
-                  <div key={item.id} className="group p-4 rounded-2xl border border-red-100 bg-red-50/50 dark:bg-red-900/10 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all cursor-pointer">
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-bold text-red-700 dark:text-red-300">{item.name}</span>
-                      <span className="bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200 text-[10px] px-2 py-0.5 rounded-full font-bold">{t.urgent}</span>
-                    </div>
-                    <p className="text-xs text-red-600 dark:text-red-400 mb-2">
-                      {lang === 'ar' ? `الرصيد: ${item.stock} علبة فقط` : `Stock: ${item.stock} only`}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-gray-400 text-center p-6">
-                  <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-4 text-green-500"><Activity size={32}/></div>
-                  <p>{t.stable}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Activity Log */}
-          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-gray-800 dark:text-white">{t.activityLog}</h3>
-              <MoreVertical size={16} className="text-gray-400 cursor-pointer" />
-            </div>
-            <ActivityLog limit={3} />
-          </div>
+          {/* Spatial Live Alerts Panel */}
+          <motion.div variants={itemVariants} className="h-full">
+            <SpatialCard glowColor="239, 68, 68" className="h-full flex flex-col p-0">
+              <div className="p-6 md:p-8 border-b border-slate-200/50 dark:border-white/5 flex justify-between items-center">
+                <h3 className="font-black text-xl text-slate-800 dark:text-white flex items-center gap-3 tracking-tight">
+                  <span className="flex h-4 w-4 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
+                  </span>
+                  {t.liveAlerts || 'شاشة الإنذار المبكر'}
+                </h3>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 hide-scrollbar min-h-[400px]">
+                <AnimatePresence>
+                  {criticalShortages > 0 ? (
+                    criticalItems.map((item, index) => (
+                      <motion.div 
+                        key={item.id}
+                        initial={{ opacity: 0, x: -20, scale: 0.95 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ delay: index * 0.1 }}
+                        whileHover={{ scale: 1.02 }} 
+                        className="p-5 rounded-2xl border border-red-200 dark:border-red-900/30 bg-gradient-to-r from-red-50 to-white dark:from-red-950/20 dark:to-slate-900/50 hover:shadow-lg transition-all cursor-pointer relative overflow-hidden"
+                      >
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500"></div>
+                        <div className="flex justify-between items-start mb-3">
+                          <span className="font-black text-red-700 dark:text-red-400 text-base">{item.name}</span>
+                          <span className="bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 text-[9px] px-2.5 py-1 rounded-md font-black tracking-widest uppercase animate-pulse border border-red-200 dark:border-red-500/30">{t.urgent || 'تدخل عاجل'}</span>
+                        </div>
+                        <p className="text-xs text-red-800/70 dark:text-red-300/70 font-bold flex justify-between items-center">
+                          {lang === 'ar' ? 'الرصيد المتبقي بالسيستم:' : 'Remaining Stock:'}
+                          <span className="text-red-600 dark:text-red-400 font-black text-sm bg-red-50 dark:bg-red-900/40 px-2 py-0.5 rounded-lg">{item.stock} علبة</span>
+                        </p>
+                      </motion.div>
+                    ))
+                  ) : (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full flex flex-col items-center justify-center text-slate-400 text-center">
+                      <div className="w-24 h-24 bg-green-500/10 border border-green-500/20 rounded-full flex items-center justify-center mb-6 text-green-500 shadow-[0_0_30px_rgba(34,197,94,0.2)]">
+                        <CheckCircle2 size={48} strokeWidth={1.5}/>
+                      </div>
+                      <p className="font-black text-xl text-slate-800 dark:text-white mb-2 tracking-tight">{t.stable || 'النظام مستقر تماماً'}</p>
+                      <p className="text-sm font-medium">لا توجد أي نواقص حرجة في المخزون حالياً.</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </SpatialCard>
+          </motion.div>
 
         </div>
       </div>
 
-      {/* 🟢 Modal with Translations */}
-      <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title={t.reportTitle}>
-        <form onSubmit={handleReportSubmit} className="space-y-4">
-          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 rounded-xl text-sm border border-amber-200 dark:border-amber-900/30 flex gap-2">
-              <AlertTriangle size={18}/>
-              <p>{lang === 'ar' ? "تنبيه: البيانات الدقيقة تساعد في سرعة وصول الدعم." : "Accurate data ensures faster support."}</p>
+      {/* 🟢 Spatial Emergency Report Modal */}
+      <PremiumModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title={t.reportTitle || 'إطلاق إنذار نواقص عاجل'}>
+        <form onSubmit={handleReportSubmit} className="space-y-6">
+          
+          <div className="p-5 bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 rounded-[1.5rem] text-xs font-bold border border-amber-200 dark:border-amber-500/20 flex gap-4 leading-relaxed shadow-inner">
+              <AlertTriangle size={24} className="shrink-0 text-amber-500"/>
+              <p>{lang === 'ar' ? "هذا الإجراء سيقوم بتنبيه غرفة العمليات المركزية فوراً وإصدار إشعار لجميع مديري الإمداد. يرجى توخي الدقة." : "This will immediately alert the central operations room. Please be accurate."}</p>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">{t.governorate}</label>
-              <select 
-                required 
-                value={reportData.governorate} 
-                onChange={e => setReportData({...reportData, governorate: e.target.value})}
-                className="w-full p-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 dark:text-gray-300"
-              >
-                <option value="">{lang === 'ar' ? "اختر..." : "Select..."}</option>
-                {GOVERNORATES_LIST.map(gov => (
-                  <option key={gov} value={gov}>{gov}</option>
-                ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">{t.governorate || 'المحافظة'}</label>
+              <select required value={reportData.governorate} onChange={e => setReportData({...reportData, governorate: e.target.value})} className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 outline-none text-sm font-bold text-slate-900 dark:text-white transition-all shadow-sm">
+                <option value="" disabled>{lang === 'ar' ? "اختر المحافظة..." : "Select..."}</option>
+                {GOVERNORATES_LIST.map(gov => <option key={gov} value={gov}>{gov}</option>)}
               </select>
             </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">{t.hospitalName}</label>
-              <input 
-                required 
-                value={reportData.hospital} 
-                onChange={e => setReportData({...reportData, hospital: e.target.value})} 
-                className="w-full p-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 dark:text-gray-300" 
-              />
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">{t.hospitalName || 'اسم المستشفى / المركز'}</label>
+              <input required type="text" value={reportData.hospital} onChange={e => setReportData({...reportData, hospital: e.target.value})} className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 outline-none text-sm font-bold text-slate-900 dark:text-white transition-all shadow-sm" />
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">{t.drugName}</label>
-            <input 
-              required 
-              value={reportData.drug} 
-              onChange={e => setReportData({...reportData, drug: e.target.value})} 
-              className="w-full p-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 dark:text-gray-300" 
-            />
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">{t.drugName || 'اسم الدواء أو الصنف'}</label>
+            <input required type="text" value={reportData.drug} onChange={e => setReportData({...reportData, drug: e.target.value})} className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 outline-none text-sm font-bold text-slate-900 dark:text-white transition-all shadow-sm" />
           </div>
 
-          <div>
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">{t.priority}</label>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">{t.priority || 'درجة الأهمية'}</label>
             <div className="grid grid-cols-3 gap-3">
               {['low', 'medium', 'high'].map((level) => (
                 <button
                   key={level} type="button" onClick={() => setReportData({...reportData, priority: level})}
-                  className={`py-2 rounded-xl text-sm font-bold border transition-all ${
+                  className={`py-4 rounded-2xl text-xs font-black border-2 transition-all ${
                     reportData.priority === level 
-                    ? (level === 'high' ? 'bg-red-500 text-white border-red-500' : level === 'medium' ? 'bg-orange-500 text-white border-orange-500' : 'bg-yellow-500 text-white border-yellow-500')
-                    : 'bg-white dark:bg-slate-800 border-gray-200 text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700'
+                    ? (level === 'high' ? 'bg-red-500 text-white border-red-500 shadow-[0_10px_20px_rgba(239,68,68,0.3)]' : level === 'medium' ? 'bg-orange-500 text-white border-orange-500 shadow-[0_10px_20px_rgba(249,115,22,0.3)]' : 'bg-yellow-500 text-white border-yellow-500 shadow-[0_10px_20px_rgba(234,179,8,0.3)]')
+                    : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
-                  {level === 'high' ? t.priorities.high : level === 'medium' ? t.priorities.medium : t.priorities.low}
+                  {level === 'high' ? (t.priorities?.high || 'قصوى') : level === 'medium' ? (t.priorities?.medium || 'متوسطة') : (t.priorities?.low || 'عادية')}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
-            <button type="button" onClick={() => setIsReportModalOpen(false)} className="flex-1 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">{t.cancel}</button>
-            <button disabled={isSubmitting} type="submit" className="flex-[2] py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/30 flex justify-center items-center gap-2">
-               {isSubmitting ? t.loading : <><Send size={18} /> {t.sendReport}</>}
+          <div className="flex gap-4 pt-6 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onClick={() => setIsReportModalOpen(false)} className="flex-[1] py-4 rounded-2xl font-black text-slate-600 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">{t.cancel || 'إلغاء الأمر'}</button>
+            <button disabled={isSubmitting} type="submit" className="flex-[2] py-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black shadow-[0_10px_30px_rgba(220,38,38,0.4)] flex justify-center items-center gap-2 active:scale-95 transition-transform disabled:opacity-70">
+               {isSubmitting ? <span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></span> : <><Send size={18} /> {t.sendReport || 'تأكيد وإرسال التنبيه'}</>}
             </button>
           </div>
         </form>
-      </Modal>
+      </PremiumModal>
 
-    </div>
+    </motion.div>
   );
 };
 
