@@ -1,16 +1,66 @@
-# React + Vite
+# 💊 Tiryaq (ترياق)
+## Intelligent Pharmacy OS & Drug Logistics Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Tiryaq** هو نظام تشغيل صيدلي سحابي (Pharmacy OS) يهدف إلى **رقمنة قطاع الصيدلة في مصر** ومعالجة مشكلة **نواقص الأدوية** عبر بناء نظام بيئي ذكي يربط بين **الصيدليات، المرضى، والمخازن** في منصة واحدة متكاملة.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 📌 Problem Statement
+يعاني سوق الدواء من:
+- عدم وجود رؤية مركزية لمخزون الأدوية
+- صعوبة وصول المرضى للأدوية الناقصة
+- توزيع غير عادل للمخزون بين المحافظات
+- غياب التحليل والتنبؤ المبني على البيانات
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 🎯 Solution
+يوفر **Tiryaq**:
+- منصة رقمية موحدة لإدارة المخزون والطلبات
+- نظام تتبع لحظي لنواقص الأدوية
+- محرك تنبؤ ذكي يعتمد على البيانات التاريخية
+- تجربة استخدام سلسة للصيدلي والمريض
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🌟 Core Modules & Features
+
+### 🏥 Pharmacy Portal
+- Smart Inventory Management (Excel Upload)
+- Order Management System
+- Real-time Analytics Dashboard
+
+### 👮 Admin Center
+- Drug Shortage Heatmap & Alerts
+- AI Demand Forecasting
+- Logistics & Distribution Tracking
+
+### 👤 Patient App
+- Drug Availability Search
+- Prescription Upload & Processing
+
+---
+
+## 🚀 Tech Stack
+**Frontend:** React.js (Vite), Tailwind CSS, Framer Motion  
+**Backend:** Firebase (Firestore, Auth, Storage)  
+**Utilities:** XLSX Library
+
+---
+
+## 🛠️ Installation
+```bash
+git clone https://github.com/your-username/tiryaq.git
+cd tiryaq
+npm install
+npm run dev
+```
+
+---
+
+## 📜 License
+MIT License
+
+---
+
+Tiryaq — Smart Pharmacy Ecosystem for a Healthier Future
