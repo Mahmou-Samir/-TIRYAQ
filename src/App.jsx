@@ -3,6 +3,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { SettingsProvider } from './context/SettingsContext';
 import { Loader2 } from 'lucide-react';
 
+// ✅ استيراد مكون تثبيت التطبيق (PWA)
+import InstallPWA from './components/InstallPWA';
+
 // 1. Layouts & Auth Wrappers
 import Layout from './components/layout/Layout'; 
 import PatientLayout from './components/layout/PatientLayout';
@@ -51,6 +54,10 @@ const PageLoader = () => (
 const App = () => {
   return (
     <SettingsProvider>
+      
+      {/* 🟢 بانر الـ PWA هيظهر هنا فوق كل الموقع لما يكون جاهز للتثبيت */}
+      <InstallPWA />
+
       {/* Suspense يغلف كل الراوتر لعرض اللودر أثناء تحميل الملفات */}
       <Suspense fallback={<PageLoader />}>
         <Routes>
