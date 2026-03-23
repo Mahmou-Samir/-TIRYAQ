@@ -1,0 +1,198 @@
+import React, { useState } from 'react';
+import { KeyRound, Mail, ArrowRight, Loader2, AlertCircle, CheckCircle2, ArrowLeft, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { auth } from '../firebase/config';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const ForgotPassword = () => {
+  const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isFocused, setIsFocused] = useState(null);
+
+  // تأثير 3D للبطاقة عند حركة الماوس
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const handleMouseMove = (e) => {
+    const { clientX, clientY } = e;
+    const { innerWidth, innerHeight } = window;
+    const x = (clientX / innerWidth - 0.5) * 20;
+    const y = (clientY / innerHeight - 0.5) * -20;
+    setMousePosition({ x, y });
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setSuccess('تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني بنجاح. يرجى مراجعة صندوق الوارد.');
+      setEmail(''); // تفريغ الحقل بعد النجاح
+    } catch (err) {
+      console.error("Reset Error:", err.code);
+      switch (err.code) {
+        case 'auth/user-not-found':
+          setError('لم نتمكن من العثور على حساب مرتبط بهذا البريد الإلكتروني.');
+          break;
+        case 'auth/invalid-email':
+          setError('صيغة البريد الإلكتروني غير صحيحة.');
+          break;
+        case 'auth/too-many-requests':
+          setError('تم حظر الطلبات مؤقتاً بسبب كثرة المحاولات. يرجى المحاولة لاحقاً.');
+          break;
+        default:
+          setError('حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // إعدادات الأنيميشن
+  const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.2 } } };
+  const itemVariants = { hidden: { opacity: 0, y: 30, filter: "blur(10px)" }, show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { type: "spring", stiffness: 300, damping: 24 } } };
+  const shake = { shake: { x: [0, -10, 10, -10, 10, -5, 5, 0], transition: { duration: 0.4 } } };
+
+  return (
+    <div 
+      className="min-h-screen bg-[#020617] flex items-center justify-center p-4 relative overflow-hidden font-sans perspective-1000" 
+      dir="rtl"
+      onMouseMove={handleMouseMove}
+    >
+      
+      {/* 🌌 Background Elements */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+      <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-transparent to-[#020617]"></div>
+      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+
+      {/* Floating Animated Orbs (Different colors for variety: Purple & Emerald) */}
+      <motion.div 
+        animate={{ scale: [1, 1.2, 1], rotate: [0, 180, 360], x: [0, -50, 0] }} 
+        transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+        className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-gradient-to-bl from-purple-600/20 to-fuchsia-600/20 blur-[120px] rounded-full pointer-events-none"
+      />
+      <motion.div 
+        animate={{ scale: [1, 1.5, 1], x: [0, 100, 0], y: [0, 50, 0] }} 
+        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-gradient-to-tr from-emerald-600/20 to-blue-600/20 blur-[120px] rounded-full pointer-events-none"
+      />
+
+      {/* 🛸 Main 3D Card Container */}
+      <motion.div 
+        animate={{ rotateX: mousePosition.y, rotateY: mousePosition.x }}
+        transition={{ type: "spring", stiffness: 100, damping: 30, mass: 0.5 }}
+        style={{ transformStyle: "preserve-3d" }}
+        className="w-full max-w-[460px] relative z-10"
+      >
+        {/* Glow behind card */}
+        <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 to-emerald-500 rounded-[2.8rem] blur-xl opacity-20"></div>
+
+        <motion.div 
+          variants={containerVariants} initial="hidden" animate="show"
+          className="bg-[#0b1121]/80 backdrop-blur-3xl border border-white/10 p-10 rounded-[2.5rem] shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden"
+          style={{ transform: "translateZ(30px)" }} // Pop-out effect
+        >
+          
+          {/* Header */}
+          <motion.div variants={itemVariants} className="text-center mb-10 relative">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-black tracking-widest uppercase mb-6">
+              <Sparkles size={12} /> استعادة الحساب
+            </div>
+            <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-blue-600 rounded-[1.2rem] flex items-center justify-center mx-auto mb-5 shadow-[0_0_30px_rgba(147,51,234,0.4)]">
+              <KeyRound className="text-white" size={36} strokeWidth={2.5} />
+            </div>
+            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">نسيت كلمة المرور؟</h1>
+            <p className="text-slate-400 font-medium text-sm">أدخل بريدك الإلكتروني وسنرسل لك رابطاً لإعادة تعيينها.</p>
+          </motion.div>
+
+          {/* Messages */}
+          <AnimatePresence mode="wait">
+            {error && (
+              <motion.div 
+                key="error"
+                variants={shake} initial="hidden" animate="shake" exit={{ opacity: 0, scale: 0.9, height: 0 }}
+                className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-2xl mb-8 flex items-start gap-3 text-sm font-bold shadow-inner overflow-hidden"
+              >
+                <AlertCircle size={20} className="shrink-0 mt-0.5" /> 
+                <span className="leading-relaxed">{error}</span>
+              </motion.div>
+            )}
+            
+            {success && (
+              <motion.div 
+                key="success"
+                initial={{ opacity: 0, scale: 0.9, height: 0 }} animate={{ opacity: 1, scale: 1, height: 'auto' }} exit={{ opacity: 0, scale: 0.9, height: 0 }}
+                className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-2xl mb-8 flex items-start gap-3 text-sm font-bold shadow-inner overflow-hidden"
+              >
+                <CheckCircle2 size={20} className="shrink-0 mt-0.5" /> 
+                <span className="leading-relaxed">{success}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Form */}
+          <form onSubmit={handleResetPassword} className="space-y-6">
+            
+            {/* Email Field */}
+            <motion.div variants={itemVariants} className="space-y-2 relative">
+              <label className="text-slate-300 text-xs font-black tracking-widest uppercase ml-1">البريد الإلكتروني</label>
+              <div className="relative group">
+                <div className={`absolute -inset-0.5 rounded-2xl transition-all duration-500 ${isFocused === 'email' ? 'bg-gradient-to-r from-purple-500 to-blue-500 blur opacity-50' : 'opacity-0'}`}></div>
+                <div className="relative flex items-center bg-[#020617] border border-white/5 rounded-2xl overflow-hidden transition-all duration-300">
+                  <div className="pl-3 pr-4 text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Mail size={20} />
+                  </div>
+                  <input 
+                    type="email" required autoComplete="email"
+                    onFocus={() => setIsFocused('email')} onBlur={() => setIsFocused(null)}
+                    className="w-full bg-transparent py-4 pl-4 text-white placeholder:text-slate-600 outline-none font-bold"
+                    placeholder="name@example.com"
+                    value={email}
+                    onChange={(e) => {setEmail(e.target.value); setError(''); setSuccess('');}}
+                  />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Submit Button */}
+            <motion.div variants={itemVariants} className="pt-4">
+              <button 
+                disabled={isLoading || success}
+                className="relative w-full overflow-hidden rounded-2xl font-black text-white shadow-[0_0_40px_rgba(147,51,234,0.3)] transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed group border border-white/10"
+              >
+                {/* Fluid Gradient Background */}
+                <div className="absolute inset-0 bg-[linear-gradient(110deg,#9333ea,#4f46e5,#9333ea)] bg-[length:200%_auto] animate-gradient transition-all duration-500 group-hover:bg-[position:right_center]"></div>
+                
+                <div className="relative py-4 flex items-center justify-center gap-3">
+                  {isLoading ? (
+                    <Loader2 size={24} className="animate-spin" />
+                  ) : (
+                    <>
+                      <span>إرسال رابط الاستعادة</span> 
+                      <ArrowLeft size={20} className="group-hover:-translate-x-2 transition-transform duration-300" />
+                    </>
+                  )}
+                </div>
+              </button>
+            </motion.div>
+          </form>
+
+          {/* Footer (Back to Login) */}
+          <motion.div variants={itemVariants} className="mt-8 text-center border-t border-white/5 pt-6">
+            <Link to="/login" className="group relative w-full inline-flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-slate-300 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all active:scale-[0.98]">
+              <ArrowRight size={18} className="text-slate-400 group-hover:text-white transition-colors group-hover:translate-x-1" /> العودة إلى تسجيل الدخول
+            </Link>
+          </motion.div>
+
+        </motion.div>
+      </motion.div>
+
+    </div>
+  );
+};
+
+export default ForgotPassword;

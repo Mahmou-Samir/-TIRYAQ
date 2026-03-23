@@ -13,6 +13,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 // -- Auth --
 const Landing = lazy(() => import('./pages/Landing'));
 const Login = lazy(() => import('./pages/Login'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const Register = lazy(() => import('./pages/Register'));
 
 // -- Admin --
@@ -58,6 +59,7 @@ const App = () => {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
 
           {/* 👮 Admin Portal (Blue Theme) */}
           <Route path="/admin" element={
