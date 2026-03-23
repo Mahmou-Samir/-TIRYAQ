@@ -11,7 +11,7 @@ export default defineConfig({
       devOptions: {
         enabled: true
       },
-      includeAssets: ['tiryaq-icon.svg'],
+      includeAssets: ['tiryaq-icon.png'],
       manifest: {
         name: 'Tiryaq (ترياق)',
         short_name: 'Tiryaq',
@@ -22,13 +22,13 @@ export default defineConfig({
         orientation: 'portrait',
         icons: [
           {
-            src: '/tiryaq-icon.svg',
+            src: '/tiryaq-icon.png',
             sizes: '192x192',
             type: 'image/svg+xml',
             purpose: 'any maskable'
           },
           {
-            src: '/tiryaq-icon.svg',
+            src: '/tiryaq-icon.png',
             sizes: '512x512',
             type: 'image/svg+xml',
             purpose: 'any maskable'
