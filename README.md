@@ -59,7 +59,7 @@ npm run dev
 ---
 
 ## 📜 License
-Mahmoud Samir License
+MIT License
 
 ---
 
