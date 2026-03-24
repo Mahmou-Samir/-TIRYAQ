@@ -46,11 +46,3 @@
     "vite-plugin-pwa": "^1.2.0"
   }
 }
-{
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
-}
