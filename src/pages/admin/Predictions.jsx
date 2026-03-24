@@ -61,7 +61,7 @@ const Predictions = () => {
         glr_quantity: targetQuantity
       };
 
-      const response = await fetch('https://mahmoud1412-tiryaq-api.hf.space/predict', {
+      const response = await fetch('https://mahmoud1412-tiryaq-backend.hf.space', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
