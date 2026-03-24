@@ -6,7 +6,7 @@ import { Brain, Sliders, Sparkles, TrendingUp, DollarSign, RefreshCw, CalendarDa
 import { useSettings } from '../../context/SettingsContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// القائمة الحقيقية (نفس القائمة السابقة)
+// القائمة الحقيقية
 const PRODUCT_CATALOG = {
   "Revolution Puppy Kitten": { "product": "Revolution Puppy Kitten - 155", "group": "Parasiticides", "item": "Rev Mauv PupKit           - 10000320" },
   "Revolution Feline": { "product": "Revolution Feline - 154", "group": "Parasiticides", "item": "Rev 3pk Blu/Cat           - 10000335" },
@@ -61,7 +61,7 @@ const Predictions = () => {
         glr_quantity: targetQuantity
       };
 
-      const response = await fetch('https://mahmoud1412-tiryaq-backend.hf.space', {
+      const response = await fetch('https://mahmoud1412-tiryaq-api.hf.space/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -95,9 +95,8 @@ const Predictions = () => {
     const currentYear = new Date().getFullYear();
 
     if (timeHorizon === 'days') {
-      // 🟢 توقع 30 يوم قادمة (تذبذب يومي يحاكي حركة الزبائن)
       for (let i = 1; i <= 30; i++) {
-        const volatility = (Math.random() * 0.2) - 0.1; // تذبذب 10% صعوداً وهبوطاً
+        const volatility = (Math.random() * 0.2) - 0.1;
         data.push({
           timeLabel: lang === 'ar' ? `يوم ${i}` : `Day ${i}`,
           revenue: Math.round(baseValue * (1 + volatility)),
@@ -105,14 +104,12 @@ const Predictions = () => {
       }
     } 
     else if (timeHorizon === 'months') {
-      // 🟢 توقع 12 شهر قادمة (منحنى موسمي)
       const monthsAr = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
       const monthsEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       
       for (let i = 0; i < 12; i++) {
-        // تأثير موسمي (الذروة في الشتاء والصيف)
         const seasonality = Math.sin((i / 11) * Math.PI) * 0.15; 
-        const growth = i * 0.02; // نمو تدريجي 2% شهرياً
+        const growth = i * 0.02; 
         
         data.push({
           timeLabel: lang === 'ar' ? monthsAr[i] : monthsEn[i],
@@ -121,9 +118,8 @@ const Predictions = () => {
       }
     } 
     else if (timeHorizon === 'years') {
-      // 🟢 توقع 5 سنوات قادمة (نمو سنوي مركب)
       for (let i = 0; i < 5; i++) {
-        const annualGrowth = Math.pow(1.12, i); // نمو سنوي 12%
+        const annualGrowth = Math.pow(1.12, i); 
         data.push({
           timeLabel: `${currentYear + i}`,
           revenue: Math.round(baseValue * annualGrowth),
@@ -132,7 +128,6 @@ const Predictions = () => {
     }
     return data;
   }, [predictedSales, timeHorizon, lang]);
-
 
   return (
     <div className="space-y-8 pb-12 pt-6 px-4 md:px-8">
@@ -232,29 +227,32 @@ const Predictions = () => {
         {/* 🟢 Time-Series Chart Panel */}
         <motion.div 
           initial={{ opacity: 0, x: lang === 'ar' ? -20 : 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
-          className="lg:col-span-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-6 md:p-8 rounded-[2.5rem] border border-slate-200/50 dark:border-white/5 shadow-lg flex flex-col"
+          className="lg:col-span-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-6 md:p-8 rounded-[2.5rem] border border-slate-200/50 dark:border-white/5 shadow-lg flex flex-col h-full min-h-[500px]"
         >
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+          {/* ✅ تم تعديل هذا الـ Div ليصبح Flex Column ويتجاوب مع الشاشات الصغيرة */}
+          <div className="flex flex-col 2xl:flex-row justify-between items-start 2xl:items-center mb-8 gap-6 w-full">
+            
             <h3 className="text-2xl font-black text-slate-800 dark:text-white flex items-center gap-3">
               <TrendingUp size={24} className="text-emerald-500" />
               {lang === 'ar' ? 'الإسقاط الزمني للأرباح' : 'Time Projection'}
             </h3>
             
             {/* 🟢 Time Horizon Toggles */}
-            <div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
-              <button onClick={() => setTimeHorizon('days')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${timeHorizon === 'days' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'}`}>
-                <CalendarDays size={16} /> {lang === 'ar' ? '30 يوم' : '30 Days'}
+            <div className="flex flex-wrap gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full 2xl:w-auto">
+              <button onClick={() => setTimeHorizon('days')} className={`flex-1 flex justify-center items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${timeHorizon === 'days' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'}`}>
+                <CalendarDays size={16} /> <span className="hidden sm:inline">{lang === 'ar' ? '30 يوم' : '30 Days'}</span><span className="sm:hidden">{lang === 'ar' ? 'أيام' : 'Days'}</span>
               </button>
-              <button onClick={() => setTimeHorizon('months')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${timeHorizon === 'months' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'}`}>
-                <Calendar size={16} /> {lang === 'ar' ? '12 شهر' : '12 Months'}
+              <button onClick={() => setTimeHorizon('months')} className={`flex-1 flex justify-center items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${timeHorizon === 'months' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'}`}>
+                <Calendar size={16} /> <span className="hidden sm:inline">{lang === 'ar' ? '12 شهر' : '12 Months'}</span><span className="sm:hidden">{lang === 'ar' ? 'شهور' : 'Months'}</span>
               </button>
-              <button onClick={() => setTimeHorizon('years')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${timeHorizon === 'years' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'}`}>
-                <CalendarRange size={16} /> {lang === 'ar' ? '5 سنوات' : '5 Years'}
+              <button onClick={() => setTimeHorizon('years')} className={`flex-1 flex justify-center items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${timeHorizon === 'years' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'}`}>
+                <CalendarRange size={16} /> <span className="hidden sm:inline">{lang === 'ar' ? '5 سنوات' : '5 Years'}</span><span className="sm:hidden">{lang === 'ar' ? 'سنوات' : 'Years'}</span>
               </button>
             </div>
+
           </div>
 
-          <div className="flex-1 min-h-[350px] w-full" dir="ltr">
+          <div className="flex-1 w-full" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
