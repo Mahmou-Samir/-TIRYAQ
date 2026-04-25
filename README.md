@@ -50,7 +50,7 @@
 
 ## 🛠️ Installation
 ```bash
-git clone https://github.com/your-username/tiryaq.git
+git clone https://github.com/Mahmou-Samir/tiryaq.git
 cd tiryaq
 npm install
 npm run dev
