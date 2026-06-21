@@ -1,0 +1,443 @@
+/** موسوعة صحية — أمراض شائعة مع حلول وأدوية مقترحة (للتوعية فقط) */
+
+export const DISEASE_CATEGORIES = [
+  { key: 'all', ar: 'الكل', en: 'All', icon: '📋' },
+  { key: 'respiratory', ar: 'تنفسي', en: 'Respiratory', icon: '🫁' },
+  { key: 'digestive', ar: 'هضمي', en: 'Digestive', icon: '🍽️' },
+  { key: 'pain', ar: 'ألم وحرارة', en: 'Pain & Fever', icon: '🤕' },
+  { key: 'chronic', ar: 'مزمن', en: 'Chronic', icon: '💊' },
+  { key: 'seasonal', ar: 'موسمي', en: 'Seasonal', icon: '🌸' },
+  { key: 'skin', ar: 'جلد', en: 'Skin', icon: '🧴' },
+  { key: 'deficiency', ar: 'نقص فيتامينات', en: 'Deficiency', icon: '🌿' },
+];
+
+export const HEALTH_DISEASES = [
+  {
+    id: 'cold',
+    category: 'respiratory',
+    icon: '🤧',
+    name: 'نزلة برد',
+    nameEn: 'Common Cold',
+    keywords: ['برد', 'زكام', 'cold', 'runny nose', 'سيلان', 'عطس'],
+    symptoms: ['سيلان الأنف', 'عطس', 'احتقان', 'التهاب حلق خفيف', 'كحة جافة أحياناً'],
+    symptomsEn: ['Runny nose', 'Sneezing', 'Congestion', 'Mild sore throat', 'Dry cough sometimes'],
+    causes: 'فيروسات تنفسية — تنتقل بالرذاذ والملامسة.',
+    causesEn: 'Respiratory viruses — spread via droplets and contact.',
+    solutions: [
+      'راحة كافية وشرب سوائل دافئة',
+      'غسل اليدين وتجنب مشاركة الأدوات الشخصية',
+      'استخدام محلول ملحي لتنظيف الأنف',
+      'استشارة الطبيب إذا استمرت الحرارة أكثر من 3 أيام',
+    ],
+    solutionsEn: [
+      'Rest and warm fluids',
+      'Hand hygiene; avoid sharing personal items',
+      'Saline nasal rinse',
+      'See a doctor if fever lasts over 3 days',
+    ],
+    medicines: ['كونجستال', 'باندول اكسترا'],
+    medicineIds: ['3', '1'],
+    prevention: 'تقوية المناعة — فيتامين سي، نوم كافٍ، تجنب التدخين.',
+    preventionEn: 'Boost immunity — vitamin C, sleep, avoid smoking.',
+  },
+  {
+    id: 'flu',
+    category: 'respiratory',
+    icon: '🌡️',
+    name: 'إنفلونزا',
+    nameEn: 'Influenza',
+    keywords: ['إنفلونزا', 'flu', 'حرارة', 'fever', 'أوجاع', 'body ache'],
+    symptoms: ['حرارة مفاجئة عالية', 'أوجاع عضلية', 'صداع شديد', 'إرهاق', 'كحة'],
+    symptomsEn: ['Sudden high fever', 'Muscle aches', 'Severe headache', 'Fatigue', 'Cough'],
+    causes: 'فيروس إنفلونزا — موسمي وينتشر بسرعة.',
+    causesEn: 'Influenza virus — seasonal and highly contagious.',
+    solutions: [
+      'عزل ذاتي وتجنب الاختلاط',
+      'خافض حرارة ومسكن حسب توصية الصيدلي',
+      'سوائل كثيرة — ماء، شوربة، عصائر',
+      'راجع الطبيب للفئات الحساسة (أطفال، حوامل، كبار سن)',
+    ],
+    solutionsEn: [
+      'Self-isolate; avoid crowds',
+      'Antipyretic/analgesic as advised by pharmacist',
+      'Plenty of fluids',
+      'Medical review for high-risk groups',
+    ],
+    medicines: ['باندول اكسترا', 'باندول أدفانس', 'كونجستال'],
+    medicineIds: ['1', '2', '3'],
+    prevention: 'التطعيم السنوي، الكمامة في المواسم، غسل اليدين.',
+    preventionEn: 'Annual vaccination, masks in season, hand washing.',
+  },
+  {
+    id: 'headache',
+    category: 'pain',
+    icon: '🤕',
+    name: 'صداع',
+    nameEn: 'Headache',
+    keywords: ['صداع', 'headache', 'رأس', 'migraine', 'شقيقة'],
+    symptoms: ['ألم في الرأس', 'حساسية للضوء أحياناً', 'ضغط في الصدغين أو الجبهة'],
+    symptomsEn: ['Head pain', 'Light sensitivity sometimes', 'Temple or forehead pressure'],
+    causes: 'إجهاد، قلة نوم، جفاف، توتر، أو صداع نصفي.',
+    causesEn: 'Stress, poor sleep, dehydration, tension, or migraine.',
+    solutions: [
+      'راحة في مكان هادئ ومظلم',
+      'شرب ماء كافٍ',
+      'مسكن مناسب (بارacetamol) حسب الجرعة',
+      'استشر الطبيب إذا تكرر أو كان شديداً جداً',
+    ],
+    solutionsEn: [
+      'Rest in quiet, dark room',
+      'Hydrate well',
+      'Appropriate analgesic (paracetamol) at correct dose',
+      'See doctor if recurrent or very severe',
+    ],
+    medicines: ['باندول اكسترا', 'باندول أدفانس'],
+    medicineIds: ['1', '2'],
+    prevention: 'نظام نوم منتظم، تقليل الكافيين الزائد، إدارة التوتر.',
+    preventionEn: 'Regular sleep, limit excess caffeine, stress management.',
+  },
+  {
+    id: 'fever',
+    category: 'pain',
+    icon: '🔥',
+    name: 'حرارة',
+    nameEn: 'Fever',
+    keywords: ['حرارة', 'fever', 'سخونة', 'temperature', '38', '39'],
+    symptoms: ['ارتفاع درجة الحرارة', 'قشعريرة', 'تعرق', 'إرهاق'],
+    symptomsEn: ['Elevated temperature', 'Chills', 'Sweating', 'Fatigue'],
+    causes: 'غالباً عدوى فيروسية أو بacterial — الجسم يقاوم المرض.',
+    causesEn: 'Usually viral or bacterial infection — body fighting illness.',
+    solutions: [
+      'قياس الحرارة بانتظام',
+      'خافض حرارة (Paracetamol) — لا تتجاوز الجرعة',
+      'كمادات ماء فاتر وليس بارداً',
+      'اطلب الطوارئ إذا كانت الحرارة فوق 40 أو مع تشوش',
+    ],
+    solutionsEn: [
+      'Monitor temperature regularly',
+      'Antipyretic (paracetamol) — do not exceed dose',
+      'Lukewarm compresses',
+      'Emergency if above 40°C or with confusion',
+    ],
+    medicines: ['باندول اكسترا', 'باندول أدفانس'],
+    medicineIds: ['1', '2'],
+    prevention: 'علاج السبب الأساسي، راحة، سوائل.',
+    preventionEn: 'Treat underlying cause, rest, fluids.',
+  },
+  {
+    id: 'gerd',
+    category: 'digestive',
+    icon: '🔥',
+    name: 'حموضة وارتجاع (GERD)',
+    nameEn: 'Acid Reflux (GERD)',
+    keywords: ['حموضة', 'ارتجاع', 'gerd', 'heartburn', 'معدة', 'حرقة'],
+    symptoms: ['حرقة في الصدر', 'طعم حامض في الفم', 'انتفاخ', 'كحة ليلية'],
+    symptomsEn: ['Heartburn', 'Sour taste', 'Bloating', 'Night cough'],
+    causes: 'ارتخاء sphincter المريء، وجبات دسمة، أو زيادة الوزن.',
+    causesEn: 'Relaxed lower esophageal sphincter, fatty meals, or weight gain.',
+    solutions: [
+      'تجنب الوجبات الدسمة والقهوة قبل النوم',
+      'رفع رأس السرير قليلاً',
+      'وجبات صغيرة متكررة',
+      'متابعة طبية للاستخدام الم prolonged للأدوية',
+    ],
+    solutionsEn: [
+      'Avoid fatty meals and coffee before bed',
+      'Elevate head of bed slightly',
+      'Small frequent meals',
+      'Medical follow-up for prolonged medication use',
+    ],
+    medicines: ['أوميبرازول 20'],
+    medicineIds: ['6'],
+    prevention: 'تقليل الوزن، عدم الاستلقاء بعد الأكل مباشرة.',
+    preventionEn: 'Weight control; avoid lying down right after meals.',
+  },
+  {
+    id: 'diabetes',
+    category: 'chronic',
+    icon: '🩸',
+    name: 'السكري',
+    nameEn: 'Diabetes',
+    keywords: ['سكر', 'diabetes', 'glucose', 'أنسولين', 'glycemia'],
+    symptoms: ['عطش شديد', 'تبول متكرر', 'جوع', 'إرهاق', 'بطء التئام الجروح'],
+    symptomsEn: ['Excessive thirst', 'Frequent urination', 'Hunger', 'Fatigue', 'Slow wound healing'],
+    causes: 'خلل في الأنسولين أو مقاومته — نوع 1 أو 2.',
+    causesEn: 'Insulin deficiency or resistance — type 1 or 2.',
+    solutions: [
+      'متابعة دورية مع طبيب باطنة',
+      'قياس السكر بانتظام',
+      'نظام غذائي متوازن ونشاط بدني',
+      'الالتزام بالعلاج الموصوف — لا تغيّر الدواء بنفسك',
+    ],
+    solutionsEn: [
+      'Regular follow-up with internist',
+      'Monitor blood glucose',
+      'Balanced diet and exercise',
+      'Adhere to prescribed treatment — do not change meds alone',
+    ],
+    medicines: ['فيتامين د3 5000'],
+    medicineIds: ['7'],
+    prevention: 'فحص دوري، تقليل السكريات الم refined، وزن صحي.',
+    preventionEn: 'Regular screening, reduce refined sugars, healthy weight.',
+  },
+  {
+    id: 'hypertension',
+    category: 'chronic',
+    icon: '❤️‍🩹',
+    name: 'ارتفاع ضغط الدم',
+    nameEn: 'Hypertension',
+    keywords: ['ضغط', 'hypertension', 'blood pressure', 'tension'],
+    symptoms: ['غالباً بدون أعراض', 'صداع', 'دوخة', 'طنين أذن أحياناً'],
+    symptomsEn: ['Often asymptomatic', 'Headache', 'Dizziness', 'Tinnitus sometimes'],
+    causes: 'عوامل genetic، ملح زائد، سمنة، توتر، قلة حركة.',
+    causesEn: 'Genetics, excess salt, obesity, stress, sedentary lifestyle.',
+    solutions: [
+      'قياس الضغط بانتظام',
+      'تقليل الملح والدهون',
+      'ممارسة رياضة معتدلة',
+      'علاج دوائي حسب وصف الطبيب فقط',
+    ],
+    solutionsEn: [
+      'Regular BP monitoring',
+      'Reduce salt and fats',
+      'Moderate exercise',
+      'Medication only as prescribed',
+    ],
+    medicines: [],
+    medicineIds: [],
+    prevention: 'DASH diet، وزن صحي، إقلاع عن التدخين.',
+    preventionEn: 'DASH diet, healthy weight, quit smoking.',
+  },
+  {
+    id: 'allergy',
+    category: 'seasonal',
+    icon: '🌸',
+    name: 'حساسية موسمية',
+    nameEn: 'Seasonal Allergy',
+    keywords: ['حساسية', 'allergy', 'عطس', 'حكة', 'pollen', 'أنف'],
+    symptoms: ['عطس متكرر', 'حكة أنف وعين', 'سيلان شفاف', 'احتقان'],
+    symptomsEn: ['Repeated sneezing', 'Itchy nose/eyes', 'Clear runny nose', 'Congestion'],
+    causes: 'استجابة مناعية لمسببات مثل حبوب اللقاح أو الغبار.',
+    causesEn: 'Immune response to pollen, dust, etc.',
+    solutions: [
+      'تجنب المسببات قدر الإمكان',
+      'إغلاق النوافذ في مواسم التلقيح',
+      'مضادات histamine حسب توصية الصيدلي',
+      'غسل الأنف بمحلول ملحي',
+    ],
+    solutionsEn: [
+      'Avoid triggers when possible',
+      'Close windows during pollen season',
+      'Antihistamines as advised',
+      'Saline nasal wash',
+    ],
+    medicines: ['كونجستال'],
+    medicineIds: ['3'],
+    prevention: 'معرفة المسبب، نظافة المنزل، فلاتر هواء.',
+    preventionEn: 'Identify triggers, clean home, air filters.',
+  },
+  {
+    id: 'vitamin-d',
+    category: 'deficiency',
+    icon: '☀️',
+    name: 'نقص فيتامين د',
+    nameEn: 'Vitamin D Deficiency',
+    keywords: ['فيتامين د', 'vitamin d', 'عظام', 'bones', 'تعب'],
+    symptoms: ['تعب عام', 'ألم عظام', 'ضعف عضل', 'تساقط شعر أحياناً'],
+    symptomsEn: ['General fatigue', 'Bone pain', 'Muscle weakness', 'Hair loss sometimes'],
+    causes: 'قلة التعرض للشمس، نظام غذائي ناقص، أو سوء امتصاص.',
+    causesEn: 'Low sun exposure, poor diet, or malabsorption.',
+    solutions: [
+      'فحص مستوى فيتامين D في الدم',
+      'مكمل حسب جرعة الطبيب',
+      'تعرض آمن للشمس 15–20 دقيقة يومياً',
+      'أطعمة غنية: سمك، بيض، ألبان مدعمة',
+    ],
+    solutionsEn: [
+      'Blood test for vitamin D level',
+      'Supplement per doctor dose',
+      'Safe sun exposure 15–20 min daily',
+      'Foods: fish, eggs, fortified dairy',
+    ],
+    medicines: ['فيتامين د3 5000', 'فيتامين سي 1000'],
+    medicineIds: ['7', '4'],
+    prevention: 'مكمل وقائي للفئات المعرضة (كبار سن، حجاب كامل).',
+    preventionEn: 'Preventive supplement for at-risk groups.',
+  },
+  {
+    id: 'vitamin-c',
+    category: 'deficiency',
+    icon: '🍊',
+    name: 'نقص فيتامين سي',
+    nameEn: 'Vitamin C Deficiency',
+    keywords: ['فيتامين سي', 'vitamin c', 'مناعة', 'immunity', 'scurvy'],
+    symptoms: ['إرهاق', 'بطء التئام', 'لثة حساسة', 'نزلات متكررة'],
+    symptomsEn: ['Fatigue', 'Slow healing', 'Sensitive gums', 'Frequent colds'],
+    causes: 'قلة الخضروات والفاكهة في النظام الغذائي.',
+    causesEn: 'Insufficient fruits and vegetables in diet.',
+    solutions: [
+      'زيادة الحمضيات والخضروات الورقية',
+      'مكمل فيتامين سي يومي بجرعة معتدلة',
+      'تجنب الجرعات العالية جداً دون إشراف',
+    ],
+    solutionsEn: [
+      'More citrus and leafy greens',
+      'Daily moderate vitamin C supplement',
+      'Avoid very high doses without supervision',
+    ],
+    medicines: ['فيتامين سي 1000', 'فيتامين سي 500'],
+    medicineIds: ['4', '5'],
+    prevention: 'تنويع الغذاء، طهي minimal للخضروات.',
+    preventionEn: 'Varied diet, minimal vegetable overcooking.',
+  },
+  {
+    id: 'acne',
+    category: 'skin',
+    icon: '😣',
+    name: 'حب الشباب',
+    nameEn: 'Acne',
+    keywords: ['حب الشباب', 'acne', 'بشرة', 'skin', 'رؤوس سوداء'],
+    symptoms: ['رؤوس سوداء وبيضاء', 'بثور حمراء', 'دهون زائدة', 'ندبات أحياناً'],
+    symptomsEn: ['Blackheads/whiteheads', 'Red pimples', 'Oily skin', 'Scarring sometimes'],
+    causes: 'زيادة sebum، bacteria، hormones، أو مستحضرات comedogenic.',
+    causesEn: 'Excess sebum, bacteria, hormones, or comedogenic products.',
+    solutions: [
+      'تنظيف لطيف مرتين يومياً — بدون فرك عنيف',
+      'منتجات non-comedogenic',
+      'تجنب عصر البثور',
+      'استشارة طبيب جلدية للحالات المتوسطة/الشديدة',
+    ],
+    solutionsEn: [
+      'Gentle cleansing twice daily',
+      'Non-comedogenic products',
+      'Do not squeeze pimples',
+      'Dermatologist for moderate/severe cases',
+    ],
+    medicines: ['ديتول 250 مل'],
+    medicineIds: ['8'],
+    prevention: 'غسل الوجه بعد العرق، تغيير وسادة النوم بانتظام.',
+    preventionEn: 'Wash after sweating; change pillowcase regularly.',
+  },
+  {
+    id: 'gastritis',
+    category: 'digestive',
+    icon: '🫃',
+    name: 'التهاب المعدة',
+    nameEn: 'Gastritis',
+    keywords: ['معدة', 'gastritis', ' gastritis', 'ألم بطن', 'غثيان'],
+    symptoms: ['ألم/epigastric', 'غثيان', 'فقدان شهية', 'انتفاخ', 'حموضة'],
+    symptomsEn: ['Epigastric pain', 'Nausea', 'Loss of appetite', 'Bloating', 'Heartburn'],
+    causes: 'H. pylori، NSAIDs، كحول، أو توتر.',
+    causesEn: 'H. pylori, NSAIDs, alcohol, or stress.',
+    solutions: [
+      'تجنب الأطعمة الحارة والمقلية مؤقتاً',
+      'تقليل NSAIDs (مسكنات)',
+      'وجبات خفيفة على فترات',
+      'فحص وعلاج H. pylori عند الحاجة — طبيب',
+    ],
+    solutionsEn: [
+      'Avoid spicy/fried foods temporarily',
+      'Reduce NSAID use',
+      'Light meals throughout day',
+      'H. pylori test/treatment if needed',
+    ],
+    medicines: ['أوميبرازول 20'],
+    medicineIds: ['6'],
+    prevention: 'وجبات منتظمة، تقليل التوتر، إقلاع عن التدخين.',
+    preventionEn: 'Regular meals, stress reduction, quit smoking.',
+  },
+  {
+    id: 'cough',
+    category: 'respiratory',
+    icon: '😷',
+    name: 'كحة',
+    nameEn: 'Cough',
+    keywords: ['كحة', 'cough', 'كحه', 'بلغم'],
+    symptoms: ['كough جاف أو مع بلغm', 'تهيج حلq', 'صوت أجش'],
+    symptomsEn: ['Dry or productive cough', 'Throat irritation', 'Hoarse voice'],
+    causes: 'برد، حساسية، reflux، أو التهاب bronchi.',
+    causesEn: 'Cold, allergy, reflux, or bronchitis.',
+    solutions: [
+      'عسل وليمون للكough الجاف (للبالغين)',
+      'سوائل دافئة',
+      'علاج السبب (حساسية / reflux)',
+      'راجع الطبيب إذا استمرت أكثر من 3 أسابيع أو مع دم',
+    ],
+    solutionsEn: [
+      'Honey/lemon for dry cough (adults)',
+      'Warm fluids',
+      'Treat underlying cause',
+      'See doctor if over 3 weeks or with blood',
+    ],
+    medicines: ['كونجستال', 'باندول اكسترا'],
+    medicineIds: ['3', '1'],
+    prevention: 'تجنب التدخين، humidifier، علاج reflux.',
+    preventionEn: 'Avoid smoking, humidifier, treat reflux.',
+  },
+  {
+    id: 'stress',
+    category: 'pain',
+    icon: '🧠',
+    name: 'توتر وقلق',
+    nameEn: 'Stress & Anxiety',
+    keywords: ['توتر', 'stress', 'قلق', 'anxiety', ' insomnia', 'نوم'],
+    symptoms: ['قلق', 'أرق', 'تسارع ض heartbeat', 'تعب', 'صعوبة تركيز'],
+    symptomsEn: ['Worry', 'Insomnia', 'Palpitations', 'Fatigue', 'Poor focus'],
+    causes: 'ضغوط عمل/دراسة، قلق مزمن، أو نقص نوم.',
+    causesEn: 'Work/study pressure, chronic worry, or sleep deprivation.',
+    solutions: [
+      'تنفس عميق وتقنيات است relajación',
+      'نظام نوم ثابت',
+      'نشاط بدني منتظم',
+      'استشارة طبيب نفسي عند التأثير على الحياة اليومية',
+    ],
+    solutionsEn: [
+      'Deep breathing and relaxation',
+      'Consistent sleep schedule',
+      'Regular physical activity',
+      'Psychiatrist if daily life is affected',
+    ],
+    medicines: [],
+    medicineIds: [],
+    prevention: 'حدود عمل صحية، دعم اجتماعي، تقليل caffeine.',
+    preventionEn: 'Work boundaries, social support, limit caffeine.',
+  },
+];
+
+export const searchDiseases = (query, lang = 'ar') => {
+  const q = (query || '').toLowerCase().trim();
+  if (!q) return HEALTH_DISEASES;
+  return HEALTH_DISEASES.filter((d) => {
+    const name = lang === 'ar' ? d.name : d.nameEn;
+    const symptoms = lang === 'ar' ? d.symptoms : d.symptomsEn;
+    const kw = d.keywords.join(' ');
+    return (
+      name.toLowerCase().includes(q)
+      || kw.toLowerCase().includes(q)
+      || symptoms.some((s) => s.toLowerCase().includes(q))
+      || d.medicines.some((m) => m.toLowerCase().includes(q))
+    );
+  });
+};
+
+export const findDiseaseByText = (text, lang = 'ar') => {
+  const q = (text || '').toLowerCase();
+  let best = null;
+  let bestScore = 0;
+  HEALTH_DISEASES.forEach((d) => {
+    let score = 0;
+    if (q.includes(d.name.toLowerCase()) || q.includes(d.nameEn.toLowerCase())) score += 10;
+    d.keywords.forEach((k) => { if (q.includes(k.toLowerCase())) score += 3; });
+    const symptoms = lang === 'ar' ? d.symptoms : d.symptomsEn;
+    symptoms.forEach((s) => { if (q.includes(s.toLowerCase().slice(0, 4))) score += 2; });
+    if (score > bestScore) { bestScore = score; best = d; }
+  });
+  return bestScore >= 2 ? best : null;
+};
+
+export const getDiseaseById = (id) => HEALTH_DISEASES.find((d) => d.id === id);
+
+export const EMERGENCY_KEYWORDS = ['ألم صدر', 'chest pain', 'ضيق نفس', 'shortness of breath', 'إغماء', 'faint', 'نزيف', 'bleeding'];
+
+export const isEmergencyQuery = (text) =>
+  EMERGENCY_KEYWORDS.some((k) => text.toLowerCase().includes(k.toLowerCase()));

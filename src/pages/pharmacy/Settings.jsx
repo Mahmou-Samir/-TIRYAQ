@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings as SettingsIcon, Moon, Sun, Globe, Bell, Lock, CheckCircle2, Loader2, MailCheck } from 'lucide-react';
+import { Settings as SettingsIcon, Moon, Sun, Globe, Bell, Lock, CheckCircle2, Loader2, MailCheck, AlertTriangle } from 'lucide-react';
 import { useSettings } from '../../context/SettingsContext';
 import { auth } from '../../firebase/config';
 import { sendPasswordResetEmail } from 'firebase/auth';

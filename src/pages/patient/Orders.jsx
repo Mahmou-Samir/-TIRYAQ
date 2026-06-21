@@ -1,12 +1,16 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   ShoppingBag, Truck, CheckCircle2, Clock, MapPin,
   Phone, Package, AlertCircle, X,
   Star, RefreshCw, Navigation, MessageSquare, Receipt,
   ChevronDown, Send, Headphones, Shield, Zap, Bell,
-  ArrowRight, Filter, Search
+  Search, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getAuth } from 'firebase/auth';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import { usePatient } from '../../context/PatientContext';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 const INITIAL_ACTIVE = [
@@ -652,18 +656,98 @@ const OrderCard = ({ order, isActive, onTrack, onReorder, onRate, showToast, onS
   );
 };
 
+// ─── Map raw order → UI shape ────────────────────────────────────────────────
+const mapOrder = (raw) => {
+  const statusMap = {
+    pending: 'preparing',
+    accepted: 'preparing',
+    preparing: 'preparing',
+    ready: 'delivering',
+    delivering: 'delivering',
+    completed: 'completed',
+    cancelled: 'completed',
+  };
+  const uiStatus = statusMap[raw.status] || 'preparing';
+  const items = (raw.items || []).map((i) => ({
+    name: i.name,
+    qty: i.quantity || i.qty || 1,
+    price: i.price || 0,
+  }));
+
+  return {
+    id: raw.orderId || raw.id || `#${Date.now()}`,
+    pharmacy: raw.pharmacyName || 'صيدلية ترياق',
+    pharmacyBranch: raw.pharmacyBranch || 'القاهرة',
+    items,
+    total: raw.total || items.reduce((s, i) => s + i.price * i.qty, 0),
+    date: raw.date || '—',
+    status: uiStatus,
+    driver: uiStatus === 'delivering' ? { name: 'محمد أحمد', phone: '01012345678' } : null,
+    eta: uiStatus === 'delivering' ? '20 دقيقة' : '45 دقيقة',
+    address: raw.address || 'شارع التحرير، الدقي، الجيزة',
+    timeline: [
+      { label: 'تم تأكيد الطلب', time: raw.date || '—', done: true },
+      { label: 'تجهيز الدواء', time: uiStatus !== 'preparing' ? '—' : 'الآن', done: uiStatus !== 'preparing', active: uiStatus === 'preparing' },
+      { label: 'جاري التوصيل', time: uiStatus === 'delivering' ? 'الآن' : '—', done: uiStatus === 'delivering', active: uiStatus === 'delivering' },
+      { label: 'تم التسليم', time: uiStatus === 'completed' ? raw.date : '—', done: uiStatus === 'completed' },
+    ],
+    rating: raw.rating || 0,
+  };
+};
+
+const dedupeOrders = (orders) => {
+  const seen = new Set();
+  return orders.filter((o) => {
+    if (seen.has(o.id)) return false;
+    seen.add(o.id);
+    return true;
+  });
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Orders() {
+  const auth = getAuth();
+  const { recentOrders, cartCount, addToCart, setIsCartOpen } = usePatient();
+
   const [tab, setTab] = useState('active');
-  const [activeOrders, setActiveOrders] = useState(INITIAL_ACTIVE);
-  const [pastOrders, setPastOrders] = useState(INITIAL_PAST);
+  const [firebaseOrders, setFirebaseOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [trackingOrder, setTrackingOrder] = useState(null);
   const [supportOrder, setSupportOrder] = useState(null);
   const [toastQueue, setToastQueue] = useState([]);
-  const [cartCount, setCartCount] = useState(0);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      setLoading(false);
+      return;
+    }
+
+    const q = query(collection(db, 'orders'), where('userId', '==', uid));
+    const unsub = onSnapshot(q, (snap) => {
+      setFirebaseOrders(snap.docs.map((d) => mapOrder({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, () => setLoading(false));
+
+    return () => unsub();
+  }, [auth.currentUser?.uid]);
+
+  const allOrders = useMemo(() => {
+    const local = recentOrders.map(mapOrder);
+    return dedupeOrders([...local, ...firebaseOrders]);
+  }, [recentOrders, firebaseOrders]);
+
+  const activeOrders = useMemo(
+    () => allOrders.filter((o) => o.status !== 'completed'),
+    [allOrders]
+  );
+  const pastOrders = useMemo(
+    () => allOrders.filter((o) => o.status === 'completed'),
+    [allOrders]
+  );
 
   const showToast = useCallback((message, type = 'info') => {
     const id = Date.now();
@@ -680,18 +764,24 @@ export default function Orders() {
   };
 
   const handleReorder = (order) => {
-    setCartCount((c) => c + order.items.length);
-    showToast(`✓ تمت إضافة ${order.items.length} أصناف من ${order.pharmacy} للسلة`, 'success');
+    order.items.forEach((item) => {
+      const med = {
+        id: `reorder-${item.name}`,
+        name: item.name,
+        price: item.price,
+        stock: 99,
+        category: 'أدوية مزمنة',
+      };
+      for (let i = 0; i < item.qty; i++) addToCart(med);
+    });
+    setIsCartOpen(true);
+    showToast(`✓ تمت إضافة ${order.items.length} أصناف للسلة`, 'success');
   };
 
   const handleRate = (orderId, rating) => {
-    setPastOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, rating } : o))
-    );
     showToast(`تم حفظ تقييمك: ${'⭐'.repeat(rating)}`, 'success');
   };
 
-  // Filter / search
   const filterOrders = (orders) => {
     let list = orders;
     if (filter !== 'all') list = list.filter((o) => o.status === filter);
@@ -713,8 +803,17 @@ export default function Orders() {
     ? [{ key: 'all', label: 'الكل' }, { key: 'delivering', label: 'يوصّل' }, { key: 'preparing', label: 'يتجهز' }]
     : [{ key: 'all', label: 'الكل' }, { key: 'completed', label: 'منتهي' }];
 
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-blue-600 gap-3">
+        <Loader2 size={36} className="animate-spin" />
+        <p className="text-sm font-bold text-slate-400">جاري تحميل طلباتك...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#020617] pb-32 pt-6" dir="rtl">
+    <div className="space-y-6 pb-4" dir="rtl">
 
       {/* Toasts */}
       <div className="fixed bottom-28 left-1/2 z-[300] flex flex-col gap-2" style={{ transform: 'translateX(-50%)' }}>
@@ -735,7 +834,7 @@ export default function Orders() {
         {supportOrder && <SupportModal onClose={() => setSupportOrder(null)} />}
       </AnimatePresence>
 
-      <div className="px-5 max-w-lg mx-auto space-y-6">
+      <div className="space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -744,31 +843,23 @@ export default function Orders() {
               <ShoppingBag size={20} />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-slate-900 dark:text-white leading-none">طلباتي</h1>
-              <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                {activeOrders.length} طلب نشط
-              </p>
+              <p className="text-[11px] text-slate-400 font-medium">{activeOrders.length} طلب نشط</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Cart Badge */}
-            <AnimatePresence>
-              {cartCount > 0 && (
-                <motion.button
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0 }}
-                  onClick={() => showToast(`السلة: ${cartCount} أصناف`, 'info')}
-                  className="relative w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-white/5 shadow-sm text-blue-600"
-                >
-                  <ShoppingBag size={18} />
-                  <span className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-blue-600 text-white text-[9px] font-black rounded-full flex items-center justify-center">
-                    {cartCount}
-                  </span>
-                </motion.button>
-              )}
-            </AnimatePresence>
+            {cartCount > 0 && (
+              <motion.button
+                initial={{ scale: 0 }} animate={{ scale: 1 }}
+                onClick={() => setIsCartOpen(true)}
+                className="relative w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-white/5 shadow-sm text-blue-600"
+              >
+                <ShoppingBag size={18} />
+                <span className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-blue-600 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                  {cartCount}
+                </span>
+              </motion.button>
+            )}
 
             {/* Search Toggle */}
             <button
@@ -887,7 +978,7 @@ export default function Orders() {
         {/* Orders List */}
         <AnimatePresence mode="popLayout">
           {currentOrders.length > 0 ? (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
               {currentOrders.map((order) => (
                 <OrderCard
                   key={order.id}
@@ -930,7 +1021,7 @@ export default function Orders() {
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.9 }}
         onClick={() => setSupportOrder(true)}
-        className="fixed bottom-32 left-5 w-14 h-14 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-white/5 flex items-center justify-center text-blue-600 z-40"
+        className="fixed bottom-32 lg:bottom-8 left-5 w-14 h-14 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-white/5 flex items-center justify-center text-blue-600 z-40"
       >
         <MessageSquare size={22} strokeWidth={2} />
         <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900" />

@@ -1,8 +1,14 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getAuth, signOut, updateProfile } from 'firebase/auth';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import { useSettings } from '../../context/SettingsContext';
+import { usePatient } from '../../context/PatientContext';
 import {
   User, MapPin, CreditCard, Bell, Shield,
   HelpCircle, LogOut, Camera, Trash2, Plus, X,
-  Sun, Moon, Globe, Gift, Wallet, Phone,
+  Sun, Moon, Globe, Gift, Wallet, Phone, Clock,
   Loader2, CheckCircle2, ChevronLeft, Mail,
   ShieldCheck, Star, TrendingUp, Zap, Eye, EyeOff,
   AlertCircle, Lock, ArrowUpRight, Edit3
@@ -10,13 +16,6 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
-const LOYALTY_HISTORY = [
-  { id: 1, label: 'طلب #8921', points: +120, date: 'اليوم', type: 'earn' },
-  { id: 2, label: 'استبدال نقاط', points: -500, date: 'أمس', type: 'redeem' },
-  { id: 3, label: 'طلب #8801', points: +85, date: '10 أكتوبر', type: 'earn' },
-  { id: 4, label: 'مكافأة تسجيل', points: +200, date: '1 أكتوبر', type: 'earn' },
-];
-
 const WALLET_TOPUP = [50, 100, 200, 500];
 
 const CARD_GRADIENTS = [
@@ -57,13 +56,33 @@ const Toast = ({ message, type, onClose }) => {
   );
 };
 
+// ─── Language Switcher ────────────────────────────────────────────────────────
+const LanguageSwitcher = ({ lang, onChange, labels }) => (
+  <div className="flex gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+    {['ar', 'en'].map((code) => (
+      <button
+        key={code}
+        type="button"
+        onClick={() => onChange(code)}
+        className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all ${
+          lang === code
+            ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-md'
+            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+        }`}
+      >
+        {labels[code]}
+      </button>
+    ))}
+  </div>
+);
+
 // ─── Bottom Sheet Modal ──────────────────────────────────────────────────────
 const Sheet = ({ title, isOpen, onClose, children, size = 'md' }) => {
   const heights = { sm: 'max-h-[50vh]', md: 'max-h-[75vh]', lg: 'max-h-[90vh]' };
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center">
+        <div className="fixed inset-0 z-[200] flex items-end lg:items-center justify-center p-0 lg:p-6">
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -72,7 +91,7 @@ const Sheet = ({ title, isOpen, onClose, children, size = 'md' }) => {
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-            className={`relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-[2.5rem] shadow-2xl flex flex-col ${heights[size]}`}
+            className={`relative w-full lg:max-w-xl bg-white dark:bg-slate-900 rounded-t-[2.5rem] lg:rounded-[2.5rem] shadow-2xl flex flex-col ${heights[size]}`}
           >
             {/* Drag handle */}
             <div className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mt-3 mb-1 shrink-0" />
@@ -175,7 +194,7 @@ const Avatar = ({ src, name, size = 'lg', onClick }) => {
 };
 
 // ─── Credit Card Visual ───────────────────────────────────────────────────────
-const CardVisual = ({ card, holderName, gradientIdx = 0 }) => (
+const CardVisual = ({ card, holderName, gradientIdx = 0, labels = {} }) => (
   <div className={`relative bg-gradient-to-br ${CARD_GRADIENTS[gradientIdx % CARD_GRADIENTS.length]} rounded-[1.75rem] p-6 text-white overflow-hidden shadow-2xl select-none`}>
     {/* Decoration */}
     <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/5 rounded-full" />
@@ -192,11 +211,11 @@ const CardVisual = ({ card, holderName, gradientIdx = 0 }) => (
       </p>
       <div className="flex justify-between items-end">
         <div>
-          <p className="text-[9px] font-bold opacity-50 uppercase tracking-widest mb-1">Card Holder</p>
+          <p className="text-[9px] font-bold opacity-50 uppercase tracking-widest mb-1">{labels.cardHolder || 'Card Holder'}</p>
           <p className="text-xs font-black uppercase tracking-wide">{holderName}</p>
         </div>
         <div>
-          <p className="text-[9px] font-bold opacity-50 uppercase tracking-widest mb-1">Expires</p>
+          <p className="text-[9px] font-bold opacity-50 uppercase tracking-widest mb-1">{labels.expires || 'Expires'}</p>
           <p className="text-xs font-black font-mono">{card.expiry}</p>
         </div>
       </div>
@@ -206,22 +225,30 @@ const CardVisual = ({ card, holderName, gradientIdx = 0 }) => (
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function Profile() {
-  // ── User State ──
+  const navigate = useNavigate();
+  const auth = getAuth();
+  const { theme, toggleTheme, lang, changeLanguage, t } = useSettings();
+  const { recentOrders } = usePatient();
+  const p = t.patient?.profile ?? {};
+  const m = p.modals ?? {};
+  const toastMsg = p.toast ?? {};
+  const val = p.validation ?? {};
+  const loyaltyHistory = p.loyaltyHistory ?? [];
+
   const [user, setUser] = useState({
-    displayName: 'محمود أحمد',
-    email: 'mahmoud@example.com',
-    phone: '01012345678',
+    displayName: '',
+    email: '',
+    phone: '',
     photoURL: null,
     loyaltyPoints: 1250,
     walletBalance: 450.0,
-    memberSince: 'أكتوبر 2024',
-    totalOrders: 18,
+    memberSince: '—',
+    totalOrders: 0,
     savedAmount: 320,
   });
 
   const [addresses, setAddresses] = useState([
     { id: 1, label: 'المنزل', details: 'شارع التحرير، الدقي، الجيزة', isDefault: true, icon: '🏠' },
-    { id: 2, label: 'العمل', details: 'برج النيل، كورنيش النيل، القاهرة', isDefault: false, icon: '🏢' },
   ]);
 
   const [paymentMethods, setPaymentMethods] = useState([
@@ -229,18 +256,41 @@ export default function Profile() {
   ]);
 
   const [settings, setSettings] = useState({
-    theme: 'dark',
-    lang: 'ar',
     notifications: true,
     orderUpdates: true,
     offerAlerts: false,
   });
 
+  useEffect(() => {
+    const loadUser = async () => {
+      const fbUser = auth.currentUser;
+      if (!fbUser) return;
+
+      let phone = '';
+      try {
+        const snap = await getDoc(doc(db, 'users', fbUser.uid));
+        if (snap.exists()) phone = snap.data().phone || '';
+      } catch {}
+
+      setUser((u) => ({
+        ...u,
+        displayName: fbUser.displayName || p.defaultUser || 'مستخدم ترياق',
+        email: fbUser.email || '',
+        photoURL: fbUser.photoURL,
+        phone: phone || u.phone,
+        totalOrders: recentOrders.length,
+        memberSince: fbUser.metadata?.creationTime
+          ? new Date(fbUser.metadata.creationTime).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { month: 'long', year: 'numeric' })
+          : '—',
+      }));
+    };
+    loadUser();
+  }, [auth.currentUser?.uid, recentOrders.length, lang, p.defaultUser]);
+
   // ── UI State ──
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [langLoading, setLangLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showCvv, setShowCvv] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(null);
@@ -254,24 +304,30 @@ export default function Profile() {
   const [cardErrors, setCardErrors] = useState({});
 
   const fileRef = useRef(null);
-  const isRTL = settings.lang === 'ar';
+  const isRTL = lang === 'ar';
 
   // ── Toast ──
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
   }, []);
 
+  const switchLang = useCallback((newLang) => {
+    if (newLang === lang) return;
+    changeLanguage(newLang);
+    showToast(toastMsg.langChanged || 'Language changed', 'success');
+  }, [lang, changeLanguage, toastMsg.langChanged, showToast]);
+
   // ── Image Upload ──
   const handleImage = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 3 * 1024 * 1024) {
-      showToast('حجم الصورة كبير (الحد 3 ميجا)', 'error');
+      showToast(toastMsg.imageLarge, 'error');
       return;
     }
     const url = URL.createObjectURL(file);
     setUser((u) => ({ ...u, photoURL: url }));
-    showToast('تم تحديث الصورة الشخصية ✨', 'success');
+    showToast(toastMsg.photoUpdated, 'success');
   };
 
   // ── Profile Edit ──
@@ -284,28 +340,39 @@ export default function Profile() {
   const validateProfile = () => {
     const errs = {};
     if (!profileForm.name.trim() || profileForm.name.trim().length < 3)
-      errs.name = isRTL ? 'الاسم لازم يكون 3 حروف على الأقل' : 'Name must be at least 3 chars';
+      errs.name = val.nameMin;
     if (!/^01[0-9]{9}$/.test(profileForm.phone.replace(/\s/g, '')))
-      errs.phone = isRTL ? 'رقم الهاتف غير صحيح' : 'Invalid phone number';
+      errs.phone = val.phoneInvalid;
     setProfileErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!validateProfile()) return;
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const fbUser = auth.currentUser;
+      if (fbUser) {
+        await updateProfile(fbUser, { displayName: profileForm.name.trim() });
+        await updateDoc(doc(db, 'users', fbUser.uid), {
+          phone: profileForm.phone,
+          displayName: profileForm.name.trim(),
+        }).catch(() => {});
+      }
       setUser((u) => ({ ...u, displayName: profileForm.name.trim(), phone: profileForm.phone }));
-      showToast('تم حفظ بياناتك بنجاح ✓', 'success');
-      setLoading(false);
+      showToast(toastMsg.profileSaved, 'success');
       setModal(null);
-    }, 900);
+    } catch {
+      showToast(toastMsg.saveError, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ── Addresses ──
   const handleAddAddress = () => {
     if (!newAddress.label.trim() || !newAddress.details.trim()) {
-      showToast('يرجى ملء جميع الحقول', 'error');
+      showToast(toastMsg.fillFields, 'error');
       return;
     }
     setAddresses((prev) => [
@@ -314,17 +381,17 @@ export default function Profile() {
     ]);
     setNewAddress({ label: '', details: '', icon: '📍' });
     setShowAddForm(false);
-    showToast('تمت إضافة العنوان 📍', 'success');
+    showToast(toastMsg.addressAdded, 'success');
   };
 
   const handleDeleteAddress = (id) => {
     setAddresses((prev) => prev.filter((a) => a.id !== id));
-    showToast('تم حذف العنوان', 'info');
+    showToast(toastMsg.addressDeleted, 'info');
   };
 
   const handleSetDefault = (id) => {
     setAddresses((prev) => prev.map((a) => ({ ...a, isDefault: a.id === id })));
-    showToast('تم تعيين العنوان الافتراضي', 'success');
+    showToast(toastMsg.defaultSet, 'success');
   };
 
   // ── Cards ──
@@ -339,9 +406,9 @@ export default function Profile() {
   const validateCard = () => {
     const errs = {};
     const num = newCard.number.replace(/\s/g, '');
-    if (num.length < 16) errs.number = 'رقم البطاقة ناقص';
-    if (!/^\d{2}\/\d{2}$/.test(newCard.expiry)) errs.expiry = 'تاريخ غير صحيح';
-    if (newCard.cvv.length < 3) errs.cvv = 'CVV ناقص';
+    if (num.length < 16) errs.number = val.cardNumber;
+    if (!/^\d{2}\/\d{2}$/.test(newCard.expiry)) errs.expiry = val.cardExpiry;
+    if (newCard.cvv.length < 3) errs.cvv = val.cardCvv;
     setCardErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -361,21 +428,20 @@ export default function Profile() {
     setNewCard({ number: '', expiry: '', cvv: '' });
     setCardErrors({});
     setShowAddForm(false);
-    showToast('تمت إضافة البطاقة بنجاح 💳', 'success');
+    showToast(toastMsg.cardAdded, 'success');
   };
 
   const handleDeleteCard = (id) => {
     setPaymentMethods((prev) => prev.filter((c) => c.id !== id));
-    showToast('تم حذف البطاقة', 'info');
+    showToast(toastMsg.cardDeleted, 'info');
   };
 
-  // ── Wallet Top-Up ──
   const handleTopUp = () => {
-    if (!topUpAmount) { showToast('اختر مبلغ الشحن أولاً', 'error'); return; }
+    if (!topUpAmount) { showToast(toastMsg.topUpSelect, 'error'); return; }
     setLoading(true);
     setTimeout(() => {
       setUser((u) => ({ ...u, walletBalance: u.walletBalance + topUpAmount }));
-      showToast(`تم شحن ${topUpAmount} ج.م في محفظتك ✓`, 'success');
+      showToast((toastMsg.topUpDone || '').replace('{amount}', topUpAmount), 'success');
       setTopUpAmount(null);
       setLoading(false);
       setModal(null);
@@ -392,210 +458,179 @@ export default function Profile() {
         loyaltyPoints: u.loyaltyPoints - 500,
         walletBalance: u.walletBalance + 50,
       }));
-      showToast('تم تحويل 500 نقطة → 50 ج.م في محفظتك!', 'success');
+      showToast(toastMsg.redeemDone, 'success');
       setLoading(false);
       setModal(null);
     }, 900);
   };
 
   // ── Language Switch ──
-  const handleLang = () => {
-    setLangLoading(true);
-    setTimeout(() => {
-      setSettings((s) => ({ ...s, lang: s.lang === 'ar' ? 'en' : 'ar' }));
-      setLangLoading(false);
-      showToast('Language changed', 'success');
-    }, 900);
-  };
+  // handled by switchLang + LanguageSwitcher
 
-  // ── Logout ──
-  const handleLogout = () => {
-    if (!logoutConfirm) { setLogoutConfirm(true); setTimeout(() => setLogoutConfirm(false), 3500); return; }
+  const handleLogout = async () => {
+    if (!logoutConfirm) {
+      setLogoutConfirm(true);
+      setTimeout(() => setLogoutConfirm(false), 3500);
+      return;
+    }
     setLoading(true);
-    setTimeout(() => {
-      showToast(isRTL ? 'تم تسجيل الخروج' : 'Logged out', 'info');
+    try {
+      await signOut(auth);
+      navigate('/login');
+    } catch {
+      showToast(toastMsg.logoutFailed, 'error');
       setLoading(false);
       setLogoutConfirm(false);
-    }, 1000);
+    }
   };
 
   // ── Menu Config ──
   const menuGroups = useMemo(() => [
     {
-      title: isRTL ? 'الحساب' : 'Account',
+      title: p.groups?.account,
       items: [
         {
-          icon: User, label: isRTL ? 'البيانات الشخصية' : 'Personal Info',
+          icon: User, label: p.menu?.personalInfo,
           desc: user.displayName, color: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10',
           action: openEditProfile,
         },
         {
-          icon: MapPin, label: isRTL ? 'عناوين التوصيل' : 'Addresses',
-          desc: `${addresses.length} ${isRTL ? 'عناوين' : 'addresses'}`,
+          icon: MapPin, label: p.menu?.addresses,
+          desc: `${addresses.length} ${p.menuDesc?.addresses}`,
           color: 'text-orange-500 bg-orange-50 dark:bg-orange-500/10',
           action: () => { setShowAddForm(false); setModal('addresses'); },
         },
         {
-          icon: CreditCard, label: isRTL ? 'بطاقات الدفع' : 'Payment Cards',
-          desc: `${paymentMethods.length} ${isRTL ? 'بطاقات' : 'cards'}`,
+          icon: CreditCard, label: p.menu?.payments,
+          desc: `${paymentMethods.length} ${p.menuDesc?.cards}`,
           color: 'text-violet-600 bg-violet-50 dark:bg-violet-500/10',
           action: () => { setShowAddForm(false); setModal('payments'); },
         },
       ],
     },
     {
-      title: isRTL ? 'التفضيلات' : 'Preferences',
+      title: p.groups?.preferences,
       items: [
         {
-          icon: settings.theme === 'dark' ? Sun : Moon,
-          label: isRTL ? 'المظهر' : 'Theme',
-          desc: settings.theme === 'dark' ? (isRTL ? 'داكن' : 'Dark') : (isRTL ? 'فاتح' : 'Light'),
+          icon: theme === 'dark' ? Sun : Moon,
+          label: p.menu?.theme,
+          desc: theme === 'dark' ? p.theme?.dark : p.theme?.light,
           color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10',
-          toggle: true, value: settings.theme === 'dark',
-          action: () => setSettings((s) => ({ ...s, theme: s.theme === 'dark' ? 'light' : 'dark' })),
+          toggle: true, value: theme === 'dark',
+          action: toggleTheme,
         },
         {
-          icon: Bell, label: isRTL ? 'الإشعارات' : 'Notifications',
-          desc: settings.notifications ? (isRTL ? 'مفعّلة' : 'On') : (isRTL ? 'معطّلة' : 'Off'),
+          icon: Bell, label: p.menu?.notifications,
+          desc: settings.notifications ? p.notif?.on : p.notif?.off,
           color: 'text-amber-500 bg-amber-50 dark:bg-amber-500/10',
           toggle: true, value: settings.notifications,
           action: () => {
-            setSettings((s) => ({ ...s, notifications: !s.notifications }));
-            showToast(settings.notifications ? 'تم إيقاف الإشعارات' : 'تم تفعيل الإشعارات', 'info');
+            setSettings((s) => {
+              const next = !s.notifications;
+              showToast(next ? toastMsg.notifOn : toastMsg.notifOff, 'info');
+              return { ...s, notifications: next };
+            });
           },
-        },
-        {
-          icon: Globe, label: isRTL ? 'اللغة' : 'Language',
-          desc: settings.lang === 'ar' ? 'العربية' : 'English',
-          color: 'text-teal-600 bg-teal-50 dark:bg-teal-500/10',
-          action: handleLang,
         },
       ],
     },
     {
-      title: isRTL ? 'أخرى' : 'More',
+      title: p.groups?.more,
       items: [
         {
-          icon: ShieldCheck, label: isRTL ? 'الأمان والخصوصية' : 'Security',
-          desc: isRTL ? 'إعدادات الأمان' : 'Security settings',
+          icon: ShieldCheck, label: p.menu?.security,
+          desc: p.menuDesc?.security,
           color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10',
           action: () => setModal('security'),
         },
         {
-          icon: HelpCircle, label: isRTL ? 'مركز المساعدة' : 'Help Center',
-          desc: isRTL ? 'تواصل مع الدعم' : 'Contact support',
+          icon: HelpCircle, label: p.menu?.help,
+          desc: p.menuDesc?.help,
           color: 'text-slate-500 bg-slate-100 dark:bg-slate-800',
-          action: () => showToast('جاري فتح مركز المساعدة...', 'info'),
+          action: () => showToast(toastMsg.helpOpening, 'info'),
+        },
+        {
+          icon: Clock, label: p.menu?.activity,
+          desc: p.menuDesc?.activity,
+          color: 'text-blue-500 bg-blue-50 dark:bg-blue-500/10',
+          action: () => navigate('/patient/history'),
         },
       ],
     },
-  ], [settings, addresses.length, paymentMethods.length, user.displayName, isRTL]);
-
-  const themeClass = settings.theme === 'dark' ? 'dark' : '';
+  ], [p, settings, addresses.length, paymentMethods.length, user.displayName, theme, toggleTheme, navigate, showToast, toastMsg]);
 
   return (
-    <div
-      className={`${themeClass} min-h-screen bg-slate-50 dark:bg-[#09090b] transition-colors duration-500 pb-32`}
-      dir={isRTL ? 'rtl' : 'ltr'}
-    >
-      {/* Toast */}
+    <div className="pb-4 transition-colors duration-500">
       <AnimatePresence>
         {toast && <Toast {...toast} onClose={() => setToast(null)} />}
       </AnimatePresence>
 
-      {/* Lang loading overlay */}
-      <AnimatePresence>
-        {langLoading && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[500] bg-slate-50 dark:bg-[#09090b] flex items-center justify-center"
-          >
-            <div className="flex flex-col items-center gap-4">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                className="w-12 h-12 border-[3px] border-blue-600 border-t-transparent rounded-full"
-              />
-              <p className="text-sm font-black text-slate-400 tracking-widest uppercase">Switching</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Hidden file input */}
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
 
-      <div className="max-w-lg mx-auto">
+      <div className="max-w-5xl mx-auto lg:max-w-none">
 
-        {/* ── Hero ── */}
-        <div className="relative mb-6">
-          {/* Banner */}
-          <div className="h-44 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 relative overflow-hidden">
-            {/* geometric accents */}
-            <div className="absolute inset-0 opacity-20">
-              {[...Array(5)].map((_, i) => (
-                <div
-                  key={i}
-                  className="absolute rounded-full border border-white/20"
-                  style={{
-                    width: `${80 + i * 60}px`, height: `${80 + i * 60}px`,
-                    top: `${-20 + i * 10}px`, right: `${-20 + i * 8}px`,
-                  }}
-                />
-              ))}
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-slate-50/60 dark:from-[#09090b]/60 to-transparent" />
+        {/* Hero */}
+        <div className="relative mb-6 lg:mb-8 overflow-hidden rounded-[2rem] lg:rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 shadow-xl shadow-blue-600/15">
+          <div className="absolute inset-0 opacity-20 pointer-events-none">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="absolute rounded-full border border-white/20"
+                style={{ width: `${100 + i * 80}px`, height: `${100 + i * 80}px`, top: `${-30 + i * 15}px`, right: `${-30 + i * 12}px` }}
+              />
+            ))}
           </div>
 
-          {/* Avatar + Info */}
-          <div className="px-5 -mt-16 pb-2">
-            <div className="flex items-end gap-4">
-              <div className="relative">
-                <div className="p-1 bg-white dark:bg-[#09090b] rounded-[2.25rem] shadow-xl">
+          <div className="relative z-10 p-6 lg:p-8">
+            <div className="flex flex-col sm:flex-row sm:items-end gap-5 lg:gap-8">
+              <div className="relative shrink-0 mx-auto sm:mx-0">
+                <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded-[2.25rem] shadow-2xl">
                   <Avatar src={user.photoURL} name={user.displayName} size="lg" />
                 </div>
                 <motion.button
                   whileTap={{ scale: 0.85 }}
                   onClick={() => fileRef.current?.click()}
-                  className="absolute -bottom-1 -left-1 w-9 h-9 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg border-2 border-white dark:border-[#09090b]"
+                  className="absolute -bottom-1 -left-1 w-10 h-10 bg-white text-blue-600 rounded-2xl flex items-center justify-center shadow-lg"
                 >
-                  <Camera size={15} />
+                  <Camera size={16} />
                 </motion.button>
               </div>
-              <div className="pb-2 flex-1">
-                <h1 className="text-xl font-black text-slate-900 dark:text-white leading-tight">
-                  {user.displayName}
-                </h1>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">{user.email}</p>
-              </div>
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                onClick={openEditProfile}
-                className="pb-2 text-blue-600"
-              >
-                <Edit3 size={20} />
-              </motion.button>
-            </div>
 
-            {/* Member badge */}
-            <div className="flex items-center gap-2 mt-3">
-              <span className="flex items-center gap-1.5 text-[10px] font-black text-amber-600 bg-amber-50 dark:bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-100 dark:border-amber-500/20">
-                <Star size={11} fill="currentColor" /> عضو مميز
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium">
-                منذ {user.memberSince}
-              </span>
+              <div className="flex-1 text-center sm:text-right text-white min-w-0">
+                <h1 className="text-2xl lg:text-3xl font-black leading-tight truncate">{user.displayName || p.defaultUser}</h1>
+                <p className="text-blue-100/90 text-sm font-medium mt-1 truncate">{user.email}</p>
+                {user.phone && (
+                  <p className="text-blue-200/80 text-xs font-bold mt-1 flex items-center justify-center sm:justify-start gap-1.5">
+                    <Phone size={12} /> {user.phone}
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-3">
+                  <span className="flex items-center gap-1.5 text-[10px] font-black text-amber-300 bg-white/15 px-3 py-1.5 rounded-xl border border-white/20">
+                    <Star size={11} fill="currentColor" /> {p.premiumMember}
+                  </span>
+                  <span className="text-[10px] text-blue-200 font-medium">
+                    {p.memberSince} {user.memberSince}
+                  </span>
+                </div>
+              </div>
+
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={openEditProfile}
+                className="shrink-0 self-center sm:self-end flex items-center gap-2 px-5 py-3 bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/25 rounded-2xl text-white text-sm font-black transition-colors"
+              >
+                <Edit3 size={16} />
+                {p.editProfile}
+              </motion.button>
             </div>
           </div>
         </div>
 
-        {/* ── Stats ── */}
-        <div className="px-5 mb-6">
-          <div className="grid grid-cols-3 gap-3">
+        {/* Stats + Wallet */}
+        <div className="mb-6 lg:grid lg:grid-cols-3 lg:gap-6">
+          <div className="lg:col-span-2 grid grid-cols-3 gap-3">
             {[
-              { label: isRTL ? 'طلبات' : 'Orders', value: user.totalOrders, icon: Zap, color: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10' },
-              { label: isRTL ? 'وفّرت' : 'Saved', value: `${user.savedAmount} ج`, icon: TrendingUp, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' },
-              { label: isRTL ? 'نقاط' : 'Points', value: user.loyaltyPoints, icon: Gift, color: 'text-amber-500 bg-amber-50 dark:bg-amber-500/10' },
+              { label: p.stats?.orders, value: user.totalOrders, icon: Zap, color: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10' },
+              { label: p.stats?.saved, value: `${user.savedAmount} ${p.currency}`, icon: TrendingUp, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' },
+              { label: p.stats?.points, value: user.loyaltyPoints, icon: Gift, color: 'text-amber-500 bg-amber-50 dark:bg-amber-500/10' },
             ].map((s, i) => (
               <motion.div
                 key={i}
@@ -612,10 +647,8 @@ export default function Profile() {
               </motion.div>
             ))}
           </div>
-        </div>
 
-        {/* ── Wallet + Loyalty Cards ── */}
-        <div className="px-5 mb-6 grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-3 mt-3 lg:mt-0">
           <motion.button
             whileTap={{ scale: 0.96 }}
             onClick={() => setModal('wallet')}
@@ -623,10 +656,10 @@ export default function Profile() {
           >
             <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-white/10 rounded-full" />
             <Wallet size={22} className="mb-3 relative z-10" />
-            <p className="text-[10px] font-bold opacity-70 mb-0.5 relative z-10">{isRTL ? 'المحفظة' : 'Wallet'}</p>
+            <p className="text-[10px] font-bold opacity-70 mb-0.5 relative z-10">{p.wallet}</p>
             <p className="text-xl font-black relative z-10">
               {user.walletBalance.toFixed(0)}
-              <span className="text-xs font-bold opacity-70 mr-1">ج.م</span>
+              <span className="text-xs font-bold opacity-70 mr-1">{p.currency}</span>
             </p>
           </motion.button>
 
@@ -637,16 +670,35 @@ export default function Profile() {
           >
             <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-white/10 rounded-full" />
             <Gift size={22} className="mb-3 relative z-10" />
-            <p className="text-[10px] font-bold opacity-70 mb-0.5 relative z-10">{isRTL ? 'نقاط الولاء' : 'Points'}</p>
+            <p className="text-[10px] font-bold opacity-70 mb-0.5 relative z-10">{p.loyalty}</p>
             <p className="text-xl font-black relative z-10">
-              {user.loyaltyPoints.toLocaleString()}
-              <span className="text-xs font-bold opacity-70 mr-1">{isRTL ? 'نقطة' : 'pts'}</span>
+              {user.loyaltyPoints.toLocaleString(lang === 'ar' ? 'ar-EG' : 'en-US')}
+              <span className="text-xs font-bold opacity-70 mr-1">{p.pointsUnit}</span>
             </p>
           </motion.button>
+          </div>
         </div>
 
-        {/* ── Settings Groups ── */}
-        <div className="px-5 space-y-5">
+        {/* Language */}
+        <div className="mb-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-white/5 p-5 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-2xl bg-teal-50 dark:bg-teal-500/10 text-teal-600 flex items-center justify-center">
+              <Globe size={19} />
+            </div>
+            <div>
+              <p className="text-sm font-black text-slate-900 dark:text-white">{p.menu?.language}</p>
+              <p className="text-[10px] text-slate-400 font-medium">{lang === 'ar' ? p.language?.ar : p.language?.en}</p>
+            </div>
+          </div>
+          <LanguageSwitcher
+            lang={lang}
+            onChange={switchLang}
+            labels={{ ar: p.language?.ar, en: p.language?.en }}
+          />
+        </div>
+
+        {/* Settings Groups */}
+        <div className="space-y-5 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
           {menuGroups.map((group, gi) => (
             <motion.div
               key={gi}
@@ -692,7 +744,7 @@ export default function Profile() {
             whileTap={{ scale: 0.98 }}
             onClick={handleLogout}
             disabled={loading}
-            className={`w-full py-4 rounded-2xl border font-black text-sm flex items-center justify-center gap-2 transition-all ${
+            className={`lg:col-span-2 w-full py-4 rounded-2xl border font-black text-sm flex items-center justify-center gap-2 transition-all ${
               logoutConfirm
                 ? 'bg-red-600 text-white border-red-600 shadow-lg shadow-red-600/25'
                 : 'bg-white dark:bg-slate-900 text-red-500 border-red-100 dark:border-red-900/30'
@@ -703,15 +755,13 @@ export default function Profile() {
             ) : (
               <>
                 <LogOut size={18} />
-                {logoutConfirm
-                  ? (isRTL ? 'اضغط مجدداً للتأكيد' : 'Tap again to confirm')
-                  : (isRTL ? 'تسجيل الخروج' : 'Log Out')}
+                {logoutConfirm ? p.logoutConfirm : p.logout}
               </>
             )}
           </motion.button>
 
-          <p className="text-center text-[10px] text-slate-300 dark:text-slate-700 font-medium pb-4">
-            صيدلتي v2.4.0 · {isRTL ? 'جميع الحقوق محفوظة' : 'All rights reserved'} ©2025
+          <p className="lg:col-span-2 text-center text-[10px] text-slate-300 dark:text-slate-700 font-medium pb-4">
+            {p.version} · {p.rights} ©2025
           </p>
         </div>
       </div>
@@ -719,56 +769,24 @@ export default function Profile() {
       {/* ══ MODALS ══════════════════════════════════════════════════════════ */}
 
       {/* Edit Profile */}
-      <Sheet
-        title={isRTL ? 'تعديل البيانات' : 'Edit Profile'}
-        isOpen={modal === 'edit-profile'}
-        onClose={() => setModal(null)}
-      >
+      <Sheet title={m.editProfile} isOpen={modal === 'edit-profile'} onClose={() => setModal(null)}>
         <div className="space-y-5">
-          <Field
-            label={isRTL ? 'الاسم الكامل' : 'Full Name'}
-            icon={User}
-            value={profileForm.name}
+          <Field label={m.fullName} icon={User} value={profileForm.name}
             onChange={(e) => setProfileForm((f) => ({ ...f, name: e.target.value }))}
-            error={profileErrors.name}
-            placeholder={isRTL ? 'محمود أحمد' : 'John Doe'}
-          />
-          <Field
-            label={isRTL ? 'رقم الهاتف' : 'Phone'}
-            icon={Phone}
-            value={profileForm.phone}
+            error={profileErrors.name} placeholder={lang === 'ar' ? 'محمود أحمد' : 'John Doe'} />
+          <Field label={m.phone} icon={Phone} value={profileForm.phone}
             onChange={(e) => setProfileForm((f) => ({ ...f, phone: e.target.value }))}
-            error={profileErrors.phone}
-            type="tel"
-            dir="ltr"
-            placeholder="01xxxxxxxxx"
-          />
-          <Field
-            label={isRTL ? 'البريد الإلكتروني' : 'Email'}
-            icon={Mail}
-            value={user.email}
-            readOnly
-            className="opacity-60 cursor-not-allowed"
-            placeholder="email@example.com"
-          />
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={handleSaveProfile}
-            disabled={loading}
-            className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2"
-          >
-            {loading ? <Loader2 size={20} className="animate-spin" /> : (isRTL ? 'حفظ التغييرات' : 'Save Changes')}
+            error={profileErrors.phone} type="tel" dir="ltr" placeholder="01xxxxxxxxx" />
+          <Field label={m.email} icon={Mail} value={user.email} readOnly
+            className="opacity-60 cursor-not-allowed" placeholder="email@example.com" />
+          <motion.button whileTap={{ scale: 0.97 }} onClick={handleSaveProfile} disabled={loading}
+            className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2">
+            {loading ? <Loader2 size={20} className="animate-spin" /> : m.save}
           </motion.button>
         </div>
       </Sheet>
 
-      {/* Addresses */}
-      <Sheet
-        title={isRTL ? 'عناوين التوصيل' : 'Delivery Addresses'}
-        isOpen={modal === 'addresses'}
-        onClose={() => setModal(null)}
-        size="lg"
-      >
+      <Sheet title={m.addresses} isOpen={modal === 'addresses'} onClose={() => setModal(null)} size="lg">
         <AnimatePresence mode="wait">
           {!showAddForm ? (
             <motion.div key="list" initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 20, opacity: 0 }} className="space-y-3">
@@ -782,7 +800,7 @@ export default function Profile() {
                       <p className="font-black text-sm text-slate-900 dark:text-white">{addr.label}</p>
                       {addr.isDefault && (
                         <span className="text-[9px] font-black text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-md">
-                          {isRTL ? 'افتراضي' : 'Default'}
+                          {m.default}
                         </span>
                       )}
                     </div>
@@ -792,7 +810,7 @@ export default function Profile() {
                         onClick={() => handleSetDefault(addr.id)}
                         className="text-[10px] text-blue-600 font-black mt-1.5"
                       >
-                        {isRTL ? 'تعيين كافتراضي' : 'Set as default'}
+                        {m.setDefault}
                       </button>
                     )}
                   </div>
@@ -809,13 +827,13 @@ export default function Profile() {
                 className="w-full py-4 border-2 border-dashed border-blue-200 dark:border-blue-900/50 text-blue-600 text-sm font-black rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors"
               >
                 <Plus size={18} strokeWidth={2.5} />
-                {isRTL ? 'إضافة عنوان جديد' : 'Add New Address'}
+                {m.addAddress}
               </button>
             </motion.div>
           ) : (
             <motion.div key="form" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="space-y-4">
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">الأيقونة</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{m.icon}</p>
                 <div className="flex gap-2">
                   {['🏠', '🏢', '🏥', '📍', '🏫'].map((ico) => (
                     <button
@@ -828,31 +846,19 @@ export default function Profile() {
                   ))}
                 </div>
               </div>
-              <Field
-                label={isRTL ? 'اسم العنوان' : 'Label'}
-                value={newAddress.label}
+              <Field label={m.addressLabel} value={newAddress.label}
                 onChange={(e) => setNewAddress((a) => ({ ...a, label: e.target.value }))}
-                placeholder={isRTL ? 'مثال: المنزل' : 'e.g. Home'}
-              />
+                placeholder={m.addressLabelPh} />
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {isRTL ? 'التفاصيل' : 'Details'}
-                </label>
-                <textarea
-                  value={newAddress.details}
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{m.addressDetails}</label>
+                <textarea value={newAddress.details}
                   onChange={(e) => setNewAddress((a) => ({ ...a, details: e.target.value }))}
-                  placeholder={isRTL ? 'الشارع، العمارة، الدور...' : 'Street, Building, Floor...'}
-                  rows={3}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 rounded-2xl py-3 px-4 text-sm font-bold text-slate-900 dark:text-white outline-none resize-none placeholder:text-slate-400"
-                />
+                  placeholder={m.addressDetailsPh} rows={3}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 rounded-2xl py-3 px-4 text-sm font-bold text-slate-900 dark:text-white outline-none resize-none placeholder:text-slate-400" />
               </div>
               <div className="flex gap-3 pt-2">
-                <button onClick={() => setShowAddForm(false)} className="flex-1 py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-sm">
-                  {isRTL ? 'إلغاء' : 'Cancel'}
-                </button>
-                <button onClick={handleAddAddress} className="flex-[2] py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg">
-                  {isRTL ? 'حفظ العنوان' : 'Save Address'}
-                </button>
+                <button onClick={() => setShowAddForm(false)} className="flex-1 py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-sm">{m.cancel}</button>
+                <button onClick={handleAddAddress} className="flex-[2] py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg">{m.saveAddress}</button>
               </div>
             </motion.div>
           )}
@@ -860,18 +866,13 @@ export default function Profile() {
       </Sheet>
 
       {/* Payments */}
-      <Sheet
-        title={isRTL ? 'بطاقات الدفع' : 'Payment Cards'}
-        isOpen={modal === 'payments'}
-        onClose={() => setModal(null)}
-        size="lg"
-      >
+      <Sheet title={m.payments} isOpen={modal === 'payments'} onClose={() => setModal(null)} size="lg">
         <AnimatePresence mode="wait">
           {!showAddForm ? (
             <motion.div key="list" initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 20, opacity: 0 }} className="space-y-4">
               {paymentMethods.map((card, ci) => (
                 <div key={card.id} className="relative">
-                  <CardVisual card={card} holderName={user.displayName} gradientIdx={ci} />
+                  <CardVisual card={card} holderName={user.displayName} gradientIdx={ci} labels={m} />
                   <button
                     onClick={() => handleDeleteCard(card.id)}
                     className="absolute top-3 left-3 w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-red-500/80 rounded-xl transition-colors text-white"
@@ -885,7 +886,7 @@ export default function Profile() {
                 className="w-full py-4 border-2 border-dashed border-blue-200 dark:border-blue-900/50 text-blue-600 text-sm font-black rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors"
               >
                 <Plus size={18} strokeWidth={2.5} />
-                {isRTL ? 'إضافة بطاقة جديدة' : 'Add New Card'}
+                {m.addCard}
               </button>
             </motion.div>
           ) : (
@@ -895,10 +896,9 @@ export default function Profile() {
                 card={{ type: newCard.number.replace(/\s/g, '').startsWith('4') ? 'Visa' : 'MasterCard', last4: newCard.number.replace(/\s/g, '').slice(-4) || '••••', expiry: newCard.expiry || 'MM/YY' }}
                 holderName={user.displayName}
                 gradientIdx={1}
+                labels={m}
               />
-              <Field
-                label={isRTL ? 'رقم البطاقة' : 'Card Number'}
-                value={newCard.number}
+              <Field label={m.cardNumber} value={newCard.number}
                 onChange={(e) => setNewCard((c) => ({ ...c, number: formatCardNum(e.target.value) }))}
                 error={cardErrors.number}
                 dir="ltr"
@@ -906,9 +906,7 @@ export default function Profile() {
                 maxLength={19}
               />
               <div className="grid grid-cols-2 gap-3">
-                <Field
-                  label={isRTL ? 'تاريخ الانتهاء' : 'Expiry'}
-                  value={newCard.expiry}
+                <Field label={m.expiry} value={newCard.expiry}
                   onChange={(e) => setNewCard((c) => ({ ...c, expiry: formatExpiry(e.target.value) }))}
                   error={cardErrors.expiry}
                   dir="ltr"
@@ -936,12 +934,8 @@ export default function Profile() {
                 </div>
               </div>
               <div className="flex gap-3 pt-1">
-                <button onClick={() => setShowAddForm(false)} className="flex-1 py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-sm">
-                  {isRTL ? 'إلغاء' : 'Cancel'}
-                </button>
-                <button onClick={handleAddCard} className="flex-[2] py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg">
-                  {isRTL ? 'حفظ البطاقة' : 'Save Card'}
-                </button>
+                <button onClick={() => setShowAddForm(false)} className="flex-1 py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-sm">{m.cancel}</button>
+                <button onClick={handleAddCard} className="flex-[2] py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg">{m.saveCard}</button>
               </div>
             </motion.div>
           )}
@@ -949,21 +943,16 @@ export default function Profile() {
       </Sheet>
 
       {/* Wallet */}
-      <Sheet title={isRTL ? 'المحفظة' : 'Wallet'} isOpen={modal === 'wallet'} onClose={() => setModal(null)}>
+      <Sheet title={m.wallet} isOpen={modal === 'wallet'} onClose={() => setModal(null)}>
         <div className="space-y-5">
-          {/* Balance */}
           <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-2xl text-white text-center relative overflow-hidden">
             <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full" />
-            <p className="text-xs font-bold opacity-70 mb-1">{isRTL ? 'الرصيد الحالي' : 'Current Balance'}</p>
+            <p className="text-xs font-bold opacity-70 mb-1">{m.currentBalance}</p>
             <p className="text-4xl font-black">{user.walletBalance.toFixed(2)}</p>
-            <p className="text-sm opacity-70 mt-1">ج.م</p>
+            <p className="text-sm opacity-70 mt-1">{p.currency}</p>
           </div>
-
-          {/* Top-up amounts */}
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-              {isRTL ? 'اختر مبلغ الشحن' : 'Select Top-Up Amount'}
-            </p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{m.selectTopUp}</p>
             <div className="grid grid-cols-4 gap-2">
               {WALLET_TOPUP.map((amt) => (
                 <motion.button
@@ -989,48 +978,37 @@ export default function Profile() {
             className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 disabled:opacity-50 transition-opacity"
           >
             {loading ? <Loader2 size={18} className="animate-spin" /> : (
-              <>{isRTL ? `شحن ${topUpAmount || '—'} ج.م` : `Add ${topUpAmount || '—'} EGP`} <ArrowUpRight size={18} /></>
+              <>{(m.topUp || '').replace('{amount}', topUpAmount || '—')} <ArrowUpRight size={18} /></>
             )}
           </motion.button>
         </div>
       </Sheet>
 
       {/* Loyalty */}
-      <Sheet title={isRTL ? 'نقاط الولاء' : 'Loyalty Points'} isOpen={modal === 'loyalty'} onClose={() => setModal(null)} size="lg">
+      <Sheet title={m.loyalty} isOpen={modal === 'loyalty'} onClose={() => setModal(null)} size="lg">
         <div className="space-y-5">
-          {/* Points banner */}
           <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-6 rounded-2xl text-white text-center relative overflow-hidden">
             <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full" />
             <Gift size={28} className="mx-auto mb-2 opacity-90" />
-            <p className="text-4xl font-black">{user.loyaltyPoints.toLocaleString()}</p>
-            <p className="text-sm opacity-70 mt-1">{isRTL ? 'نقطة متاحة' : 'Available Points'}</p>
+            <p className="text-4xl font-black">{user.loyaltyPoints.toLocaleString(lang === 'ar' ? 'ar-EG' : 'en-US')}</p>
+            <p className="text-sm opacity-70 mt-1">{m.availablePoints}</p>
           </div>
-
-          {/* Redeem */}
           <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-500/20 p-4 rounded-2xl">
             <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
-              {isRTL ? 'استبدل 500 نقطة بـ' : 'Redeem 500 points for'}
-              <span className="text-amber-600 font-black"> 50 ج.م </span>
-              {isRTL ? 'في محفظتك' : 'in your wallet'}
+              {m.redeemText}
+              <span className="text-amber-600 font-black"> 50 {p.currency} </span>
+              {m.redeemWallet}
             </p>
           </div>
-
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={handleRedeem}
+          <motion.button whileTap={{ scale: 0.97 }} onClick={handleRedeem}
             disabled={loading || user.loyaltyPoints < 500}
-            className="w-full py-4 bg-amber-500 text-white rounded-2xl font-black text-sm shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {loading ? <Loader2 size={18} className="animate-spin" /> : (isRTL ? 'استبدل النقاط الآن' : 'Redeem Now')}
+            className="w-full py-4 bg-amber-500 text-white rounded-2xl font-black text-sm shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 disabled:opacity-50">
+            {loading ? <Loader2 size={18} className="animate-spin" /> : m.redeemNow}
           </motion.button>
-
-          {/* History */}
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-              {isRTL ? 'سجل النقاط' : 'Points History'}
-            </p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{m.pointsHistory}</p>
             <div className="space-y-2">
-              {LOYALTY_HISTORY.map((h) => (
+              {loyaltyHistory.map((h) => (
                 <div key={h.id} className="flex items-center justify-between py-2.5 border-b border-slate-50 dark:border-white/5 last:border-0">
                   <div>
                     <p className="text-sm font-bold text-slate-800 dark:text-white">{h.label}</p>
@@ -1047,16 +1025,16 @@ export default function Profile() {
       </Sheet>
 
       {/* Security */}
-      <Sheet title={isRTL ? 'الأمان والخصوصية' : 'Security'} isOpen={modal === 'security'} onClose={() => setModal(null)}>
+      <Sheet title={m.security} isOpen={modal === 'security'} onClose={() => setModal(null)}>
         <div className="space-y-4">
           {[
-            { icon: Lock, label: isRTL ? 'تغيير كلمة المرور' : 'Change Password', desc: isRTL ? 'آخر تغيير منذ 30 يوم' : 'Last changed 30 days ago', color: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10' },
-            { icon: Phone, label: isRTL ? 'التحقق بخطوتين' : 'Two-Factor Auth', desc: isRTL ? 'محمي بـ SMS' : 'Protected by SMS', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10', badge: isRTL ? 'مفعّل' : 'Active' },
-            { icon: Shield, label: isRTL ? 'سياسة الخصوصية' : 'Privacy Policy', desc: isRTL ? 'بياناتك مشفرة بالكامل' : 'Your data is fully encrypted', color: 'text-slate-500 bg-slate-100 dark:bg-slate-800' },
+            { icon: Lock, label: m.changePassword, desc: m.changePasswordDesc, color: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10' },
+            { icon: Phone, label: m.twoFactor, desc: m.twoFactorDesc, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10', badge: m.twoFactorActive },
+            { icon: Shield, label: m.privacy, desc: m.privacyDesc, color: 'text-slate-500 bg-slate-100 dark:bg-slate-800' },
           ].map((item, i) => (
             <button
               key={i}
-              onClick={() => showToast(item.label + ' — ' + (isRTL ? 'قريباً' : 'Coming soon'), 'info')}
+              onClick={() => showToast(`${item.label} — ${toastMsg.securitySoon}`, 'info')}
               className="w-full flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-white/5 text-right hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${item.color}`}>

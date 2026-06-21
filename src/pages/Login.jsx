@@ -41,6 +41,7 @@ const Login = () => {
         const role = docSnap.data().role;
         if (role === 'admin') navigate('/admin');
         else if (role === 'pharmacy') navigate('/pharmacy');
+        else if (role === 'doctor') navigate('/doctor');
         else navigate('/patient');
       } else {
         setError("بيانات الحساب غير مكتملة. يرجى التواصل مع الدعم الفني.");

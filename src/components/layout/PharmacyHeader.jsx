@@ -5,18 +5,20 @@ import {
   LogOut, User, Settings, AlertTriangle, CheckCircle2
 } from 'lucide-react';
 import { useSettings } from '../../context/SettingsContext';
+import { usePharmacy } from '../../context/PharmacyContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { signOut } from 'firebase/auth';
 
-const PharmacyHeader = ({ toggleSidebar, isSidebarOpen }) => {
+const PharmacyHeader = ({ toggleSidebar, pageTitle, pageSubtitle }) => {
   const { theme, toggleTheme, lang, changeLanguage, t } = useSettings();
+  const { notifications, unreadCount, markAllRead, markRead } = usePharmacy();
   const navigate = useNavigate();
   
   // 1. استخراج بيانات المستخدم الفعلي
   const currentUser = auth.currentUser;
-  const displayName = currentUser?.displayName || (lang === 'ar' ? 'صيدلي' : 'Pharmacist');
+  const displayName = currentUser?.displayName || uiText.pharmacist || (lang === 'ar' ? 'صيدلي' : 'Pharmacist');
   const userInitial = displayName.charAt(0).toUpperCase();
   const userEmail = currentUser?.email || '';
 
@@ -111,14 +113,19 @@ const PharmacyHeader = ({ toggleSidebar, isSidebarOpen }) => {
 
         <div className="hidden md:block">
           <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mb-0.5">
-            <span className="hover:text-emerald-500 cursor-pointer transition-colors" onClick={() => navigate('/pharmacy')}>Pharmacy</span>
+            <span className="hover:text-emerald-500 cursor-pointer transition-colors" onClick={() => navigate('/pharmacy')}>
+              {t?.pharmacy?.layout?.breadcrumb || 'Pharmacy'}
+            </span>
             <span className="text-slate-300">/</span>
-            <span className="text-emerald-600 dark:text-emerald-400">Workspace</span>
+            <span className="text-emerald-600 dark:text-emerald-400">{t?.pharmacy?.layout?.workspace || 'Workspace'}</span>
           </div>
           <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tight leading-none flex items-center gap-2">
-            {uiText.title || (lang === 'ar' ? 'مركز العمليات' : 'Command Center')}
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse mt-1"></div>
+            {pageTitle || uiText.title || (lang === 'ar' ? 'مركز العمليات' : 'Command Center')}
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse mt-1" />
           </h2>
+          {pageSubtitle && (
+            <p className="text-xs text-slate-400 font-medium mt-1 hidden lg:block">{pageSubtitle}</p>
+          )}
         </div>
       </div>
 
@@ -177,7 +184,9 @@ const PharmacyHeader = ({ toggleSidebar, isSidebarOpen }) => {
             className={`relative p-3.5 rounded-2xl border transition-all duration-300 outline-none ${activeDropdown === 'notifications' ? 'bg-emerald-50 dark:bg-emerald-500/20 border-emerald-200 text-emerald-600' : 'bg-white dark:bg-slate-800 border-slate-200/50 dark:border-white/5 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'} shadow-sm`}
           >
             <Bell size={20} className={activeDropdown === 'notifications' ? 'fill-emerald-600' : ''} />
-            <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-white dark:border-slate-800 rounded-full animate-pulse"></span>
+            {unreadCount > 0 && (
+              <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-white dark:border-slate-800 rounded-full animate-pulse" />
+            )}
           </button>
 
           <AnimatePresence>
@@ -188,24 +197,47 @@ const PharmacyHeader = ({ toggleSidebar, isSidebarOpen }) => {
               >
                 <div className="p-5 border-b border-slate-100 dark:border-white/5 flex justify-between items-center bg-slate-50/50 dark:bg-white/5">
                   <h3 className="font-black text-slate-800 dark:text-white">
-                    {lang === 'ar' ? 'الإشعارات' : 'Notifications'} 
-                    <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full mx-2">1</span>
+                    {uiText.notifications || (lang === 'ar' ? 'الإشعارات' : 'Notifications')}
+                    {unreadCount > 0 && (
+                      <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full mx-2">{unreadCount}</span>
+                    )}
                   </h3>
-                  <button className="text-xs font-bold text-emerald-600 hover:underline">{lang === 'ar' ? 'تحديد الكل كمقروء' : 'Mark all read'}</button>
+                  {notifications.length > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      className="text-xs font-bold text-emerald-600 hover:underline"
+                    >
+                      {uiText.markAllRead || (lang === 'ar' ? 'تحديد الكل كمقروء' : 'Mark all read')}
+                    </button>
+                  )}
                 </div>
                 <div className="max-h-[300px] overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                    <div className="flex gap-4 p-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer group relative" onClick={() => navigate('/pharmacy/orders')}>
+                  {notifications.length === 0 ? (
+                    <p className="text-center text-sm text-slate-400 font-medium py-8">
+                      {uiText.noNotifications || (lang === 'ar' ? 'لا توجد إشعارات' : 'No notifications')}
+                    </p>
+                  ) : notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      className="flex gap-4 p-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer group relative"
+                      onClick={() => { markRead(n.id); navigate('/pharmacy/orders'); setActiveDropdown(null); }}
+                    >
                       <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600">
-                        <CheckCircle2 size={18}/>
+                        <CheckCircle2 size={18} />
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-800 dark:text-white group-hover:text-emerald-600 transition-colors">
-                          {lang === 'ar' ? 'تم استلام طلب جديد #4821' : 'New order received #4821'}
+                          {uiText.newOrder || 'New order'} {n.orderId}
                         </p>
-                        <p className="text-xs text-slate-400 font-medium mt-1">{lang === 'ar' ? 'الآن' : 'Just now'}</p>
+                        <p className="text-xs text-slate-400 font-medium mt-1">
+                          {n.patientName || uiText.pharmacist} · {n.createdAt.toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
                       </div>
-                      <div className={`absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-red-500 rounded-full ${lang === 'ar' ? 'left-4' : 'right-4'}`}></div>
+                      {!n.read && (
+                        <div className={`absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-red-500 rounded-full ${lang === 'ar' ? 'left-4' : 'right-4'}`} />
+                      )}
                     </div>
+                  ))}
                 </div>
               </motion.div>
             )}
@@ -220,7 +252,7 @@ const PharmacyHeader = ({ toggleSidebar, isSidebarOpen }) => {
           >
             <div className={`text-left hidden lg:block ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
               <p className="text-[10px] text-slate-400 font-bold uppercase group-hover:text-emerald-500 transition-colors">
-                 {lang === 'ar' ? 'الصيدلية' : 'Pharmacy'}
+                 {uiText.pharmacy || (lang === 'ar' ? 'الصيدلية' : 'Pharmacy')}
               </p>
               <div className="flex items-center gap-1 justify-end">
                 <p className="text-sm font-black text-slate-800 dark:text-white leading-none mt-0.5 truncate max-w-[90px]">{displayName}</p>

@@ -7,9 +7,11 @@ import { db, auth } from '../../firebase/config';
 import { collection, query, where, onSnapshot, doc, updateDoc, orderBy } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSettings } from '../../context/SettingsContext';
+import { usePharmacy, getOrderTotal, getItemQty, getOrderDisplayId } from '../../context/PharmacyContext';
 
 const PharmacyOrders = () => {
   const { t, lang } = useSettings();
+  const { showToast } = usePharmacy();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('pending'); // pending, processing, completed
@@ -17,6 +19,8 @@ const PharmacyOrders = () => {
 
   // 🛡️ حماية الترجمة (Safe UI Texts)
   const uiText = t?.pharmacy?.orders || {};
+  const toastText = t?.pharmacy?.toast || {};
+  const currency = t?.pharmacy?.dashboard?.currency || (lang === 'ar' ? 'ج.م' : 'EGP');
 
   // 1. الاستماع للطلبات (Real-time)
   useEffect(() => {
@@ -45,14 +49,20 @@ const PharmacyOrders = () => {
     setUpdatingId(orderId);
     try {
       const orderRef = doc(db, "orders", orderId);
-      await updateDoc(orderRef, { 
+      await updateDoc(orderRef, {
         status: newStatus,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       });
-      // يمكن إضافة Custom Toast للإشعار بالنجاح هنا
+      const msgMap = {
+        accepted: toastText.orderAccepted,
+        cancelled: toastText.orderRejected,
+        ready: toastText.orderReady,
+        completed: toastText.orderCompleted,
+      };
+      showToast(msgMap[newStatus] || uiText.updateSuccess || 'Updated', 'success');
     } catch (error) {
-      console.error("Error updating order:", error);
-      alert(lang === 'ar' ? 'حدث خطأ أثناء التحديث' : 'Error updating status');
+      console.error('Error updating order:', error);
+      showToast(uiText.updateError || (lang === 'ar' ? 'حدث خطأ' : 'Error'), 'error');
     } finally {
       setUpdatingId(null);
     }
@@ -195,7 +205,7 @@ const PharmacyOrders = () => {
                 <div className="flex-1 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 mb-6 space-y-3">
                   <div className="flex justify-between items-center text-xs font-bold text-slate-500">
                     <span className="flex items-center gap-1"><Clock size={12}/> {order.createdAt ? new Date(order.createdAt.seconds * 1000).toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', {hour: '2-digit', minute:'2-digit'}) : '--:--'}</span>
-                    <span className="bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">#{order.id.slice(0,5)}</span>
+                    <span className="bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">{getOrderDisplayId(order)}</span>
                   </div>
                   
                   <div className="h-[1px] bg-slate-200 dark:bg-slate-700 w-full"></div>
@@ -209,17 +219,20 @@ const PharmacyOrders = () => {
                       {order.items?.map((item, idx) => (
                         <li key={idx} className="flex justify-between text-sm font-bold text-slate-700 dark:text-slate-300">
                           <span>{item.name}</span>
-                          <span className="text-slate-400 bg-white dark:bg-slate-800 px-1.5 rounded border border-slate-200 dark:border-slate-700 text-xs">x{item.qty}</span>
+                          <span className="text-slate-400 bg-white dark:bg-slate-800 px-1.5 rounded border border-slate-200 dark:border-slate-700 text-xs">x{getItemQty(item)}</span>
                         </li>
                       ))}
                     </ul>
                   )}
                   
-                  {order.totalPrice && (
+                  {getOrderTotal(order) > 0 && (
                     <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-700">
-                      <span className="font-bold text-slate-500 text-xs">{uiText.total || (lang === 'ar' ? 'الإجمالي المتوقع' : 'Expected Total')}</span>
-                      <span className="font-black text-emerald-600 text-lg">{order.totalPrice} {lang === 'ar' ? 'ج.م' : 'EGP'}</span>
+                      <span className="font-bold text-slate-500 text-xs">{uiText.total || (lang === 'ar' ? 'الإجمالي' : 'Total')}</span>
+                      <span className="font-black text-emerald-600 text-lg">{getOrderTotal(order)} {currency}</span>
                     </div>
+                  )}
+                  {order.payment && (
+                    <p className="text-[10px] text-slate-400 font-bold">{uiText.payment}: {order.payment}</p>
                   )}
                 </div>
 

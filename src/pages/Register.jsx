@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   User, Building2, Mail, Lock, Phone, FileText, MapPin, 
-  ArrowRight, Loader2, AlertCircle, CheckCircle 
+  ArrowRight, Loader2, AlertCircle, CheckCircle, Stethoscope
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase/config'; // تأكد من المسار
@@ -17,7 +17,7 @@ const GOVERNORATES = [
 
 const Register = () => {
   const navigate = useNavigate();
-  const [userType, setUserType] = useState('patient'); // 'patient' or 'pharmacy'
+  const [userType, setUserType] = useState('patient'); // patient | pharmacy | doctor
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -64,13 +64,19 @@ const Register = () => {
           licenseNumber: formData.licenseNumber,
           address: formData.address,
           governorate: formData.governorate,
-          verified: false, // تحتاج تفعيل
-          stockCount: 0 // قيمة افتراضية
+          verified: false,
+          stockCount: 0
         }),
 
-        // بيانات خاصة بالمريض
+        ...(userType === 'doctor' && {
+          licenseNumber: formData.licenseNumber,
+          governorate: formData.governorate,
+          verified: false,
+          profileComplete: false,
+        }),
+
         ...(userType === 'patient' && {
-          city: formData.governorate // يمكن إضافة المدينة للمريض أيضاً
+          city: formData.governorate
         })
       };
 
@@ -79,7 +85,8 @@ const Register = () => {
 
       // 6. التوجيه
       if (userType === 'patient') navigate('/patient');
-      else navigate('/pharmacy'); 
+      else if (userType === 'doctor') navigate('/doctor/profile');
+      else navigate('/pharmacy');
 
     } catch (err) {
       console.error(err);
@@ -127,13 +134,23 @@ const Register = () => {
               desc="لإدارة المخزون والمبيعات"
               color="purple"
             />
+            <RoleButton 
+              active={userType === 'doctor'} 
+              onClick={() => setUserType('doctor')}
+              icon={Stethoscope}
+              title="حساب طبيب"
+              desc="استقبال استشارات المرضى"
+              color="teal"
+            />
           </div>
         </div>
 
         {/* 🟢 نموذج التسجيل */}
         <div className="flex-1 p-8 md:p-10 overflow-y-auto max-h-[90vh] custom-scrollbar">
           <h1 className="text-2xl font-black text-white mb-6 flex items-center gap-3">
-            {userType === 'patient' ? <span className="text-blue-500">مريض جديد</span> : <span className="text-purple-500">منشأة طبية</span>}
+            {userType === 'patient' && <span className="text-blue-500">مريض جديد</span>}
+            {userType === 'pharmacy' && <span className="text-purple-500">منشأة طبية</span>}
+            {userType === 'doctor' && <span className="text-teal-500">طبيب جديد</span>}
             <span className="text-slate-600 text-lg font-normal">| بيانات الحساب</span>
           </h1>
 
@@ -147,36 +164,44 @@ const Register = () => {
             
             {/* الحقول الأساسية */}
             <div className="space-y-4">
-              <InputField icon={User} name="name" type="text" placeholder={userType === 'patient' ? "الاسم الثلاثي" : "اسم الصيدلية / المستشفى"} onChange={handleChange} color={userType === 'patient' ? 'blue' : 'purple'} />
-              <InputField icon={Mail} name="email" type="email" placeholder="البريد الإلكتروني" onChange={handleChange} color={userType === 'patient' ? 'blue' : 'purple'} />
-              <InputField icon={Phone} name="phone" type="tel" placeholder="رقم الهاتف (01xxxxxxxxx)" onChange={handleChange} color={userType === 'patient' ? 'blue' : 'purple'} />
+              <InputField icon={User} name="name" type="text" placeholder={
+                userType === 'patient' ? "الاسم الثلاثي" : userType === 'doctor' ? "د. الاسم الثلاثي" : "اسم الصيدلية / المستشفى"
+              } onChange={handleChange} color={userType === 'patient' ? 'blue' : userType === 'doctor' ? 'teal' : 'purple'} />
+              <InputField icon={Mail} name="email" type="email" placeholder="البريد الإلكتروني" onChange={handleChange} color={userType === 'patient' ? 'blue' : userType === 'doctor' ? 'teal' : 'purple'} />
+              <InputField icon={Phone} name="phone" type="tel" placeholder="رقم الهاتف (01xxxxxxxxx)" onChange={handleChange} color={userType === 'patient' ? 'blue' : userType === 'doctor' ? 'teal' : 'purple'} />
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InputField icon={Lock} name="password" type="password" placeholder="كلمة المرور" onChange={handleChange} color={userType === 'patient' ? 'blue' : 'purple'} />
-                <InputField icon={CheckCircle} name="confirmPassword" type="password" placeholder="تأكيد كلمة المرور" onChange={handleChange} color={userType === 'patient' ? 'blue' : 'purple'} />
+                <InputField icon={Lock} name="password" type="password" placeholder="كلمة المرور" onChange={handleChange} color={userType === 'patient' ? 'blue' : userType === 'doctor' ? 'teal' : 'purple'} />
+                <InputField icon={CheckCircle} name="confirmPassword" type="password" placeholder="تأكيد كلمة المرور" onChange={handleChange} color={userType === 'patient' ? 'blue' : userType === 'doctor' ? 'teal' : 'purple'} />
               </div>
             </div>
 
-            {/* حقول إضافية للصيدلية */}
-            {userType === 'pharmacy' && (
+            {(userType === 'pharmacy' || userType === 'doctor') && (
               <div className="space-y-4 animate-fade-in pt-4 border-t border-slate-800 mt-4">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">بيانات الترخيص والموقع</p>
-                <InputField icon={FileText} name="licenseNumber" type="text" placeholder="رقم الترخيص / السجل التجاري" onChange={handleChange} color="purple" />
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  {userType === 'doctor' ? 'بيانات الترخيص' : 'بيانات الترخيص والموقع'}
+                </p>
+                <InputField icon={FileText} name="licenseNumber" type="text" placeholder={
+                  userType === 'doctor' ? "رقم ترخيص مزاولة المهنة" : "رقم الترخيص / السجل التجاري"
+                } onChange={handleChange} color={userType === 'doctor' ? 'teal' : 'purple'} />
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`grid grid-cols-1 ${userType === 'pharmacy' ? 'md:grid-cols-2' : ''} gap-4`}>
                     <div className="relative group">
-                      <MapPin className="absolute right-4 top-3.5 text-slate-500 group-focus-within:text-purple-500 transition-colors" size={20} />
+                      <MapPin className={`absolute right-4 top-3.5 text-slate-500 transition-colors ${userType === 'doctor' ? 'group-focus-within:text-teal-500' : 'group-focus-within:text-purple-500'}`} size={20} />
                       <select 
                         name="governorate" 
                         onChange={handleChange} 
-                        className="w-full bg-slate-950 border border-slate-700 rounded-2xl py-3.5 pr-12 pl-4 text-white focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none appearance-none transition-all font-medium cursor-pointer"
+                        className={`w-full bg-slate-950 border border-slate-700 rounded-2xl py-3.5 pr-12 pl-4 text-white outline-none appearance-none transition-all font-medium cursor-pointer
+                          ${userType === 'doctor' ? 'focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500' : 'focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500'}`}
                       >
                         {GOVERNORATES.map(gov => (
                           <option key={gov} value={gov} className="bg-slate-900 text-white">{gov}</option>
                         ))}
                       </select>
                     </div>
-                    <InputField icon={MapPin} name="address" type="text" placeholder="العنوان بالتفصيل" onChange={handleChange} color="purple" />
+                    {userType === 'pharmacy' && (
+                      <InputField icon={MapPin} name="address" type="text" placeholder="العنوان بالتفصيل" onChange={handleChange} color="purple" />
+                    )}
                 </div>
               </div>
             )}
@@ -185,6 +210,8 @@ const Register = () => {
               className={`w-full py-4 rounded-2xl font-bold text-white flex items-center justify-center gap-2 transition-all mt-6 shadow-xl active:scale-[0.98] 
               ${userType === 'patient' 
                 ? 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 shadow-blue-600/20' 
+                : userType === 'doctor'
+                ? 'bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 shadow-teal-600/20'
                 : 'bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 shadow-purple-600/20'
               }`}
             >
@@ -209,7 +236,7 @@ const RoleButton = ({ active, onClick, icon: Icon, title, desc, color }) => (
     onClick={onClick}
     className={`w-full p-4 rounded-2xl flex items-center gap-4 transition-all duration-300 group ${
       active 
-      ? `${color === 'blue' ? 'bg-blue-600 shadow-blue-600/30 ring-blue-500' : 'bg-purple-600 shadow-purple-600/30 ring-purple-500'} text-white shadow-lg ring-2 ring-offset-2 ring-offset-slate-900 scale-[1.02]` 
+      ? `${color === 'blue' ? 'bg-blue-600 shadow-blue-600/30 ring-blue-500' : color === 'teal' ? 'bg-teal-600 shadow-teal-600/30 ring-teal-500' : 'bg-purple-600 shadow-purple-600/30 ring-purple-500'} text-white shadow-lg ring-2 ring-offset-2 ring-offset-slate-900 scale-[1.02]` 
       : 'bg-slate-700/30 text-slate-400 hover:bg-slate-700/50 hover:text-white border border-slate-700/50'
     }`}
   >
@@ -226,7 +253,7 @@ const RoleButton = ({ active, onClick, icon: Icon, title, desc, color }) => (
 
 const InputField = ({ icon: Icon, name, type, placeholder, onChange, color }) => (
   <div className="relative group">
-    <Icon className={`absolute right-4 top-3.5 text-slate-500 transition-colors ${color === 'blue' ? 'group-focus-within:text-blue-500' : 'group-focus-within:text-purple-500'}`} size={20} />
+    <Icon className={`absolute right-4 top-3.5 text-slate-500 transition-colors ${color === 'blue' ? 'group-focus-within:text-blue-500' : color === 'teal' ? 'group-focus-within:text-teal-500' : 'group-focus-within:text-purple-500'}`} size={20} />
     <input 
       required 
       name={name} 
@@ -236,6 +263,8 @@ const InputField = ({ icon: Icon, name, type, placeholder, onChange, color }) =>
       className={`w-full bg-slate-950 border border-slate-700 rounded-2xl py-3.5 pr-12 pl-4 text-white outline-none transition-all font-medium placeholder:text-slate-600
         ${color === 'blue' 
           ? 'focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500' 
+          : color === 'teal'
+          ? 'focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500'
           : 'focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500'
         }`} 
     />

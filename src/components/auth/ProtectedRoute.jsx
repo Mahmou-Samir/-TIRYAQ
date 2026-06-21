@@ -1,30 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
+import { db } from '../../firebase/config';
+
+const ROLE_HOME = {
+  admin: '/admin',
+  pharmacy: '/pharmacy',
+  doctor: '/doctor',
+  patient: '/patient',
+};
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const auth = getAuth();
   const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const location = useLocation();
 
   useEffect(() => {
-    console.log("🔒 Checking protection for:", location.pathname); // 1. أين نحن؟
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        console.log("✅ User detected:", currentUser.email); // 2. هل يوجد مستخدم؟
         setUser(currentUser);
+        try {
+          const snap = await getDoc(doc(db, 'users', currentUser.uid));
+          setRole(snap.exists() ? snap.data().role : null);
+        } catch {
+          setRole(null);
+        }
       } else {
-        console.log("❌ No user found. Redirecting to login..."); // 3. لا يوجد مستخدم
         setUser(null);
+        setRole(null);
       }
       setLoading(false);
     });
-
     return () => unsubscribe();
-  }, [auth, location]);
+  }, [auth]);
 
   if (loading) {
     return (
@@ -36,8 +48,12 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (!user) {
-    // توجيه لصفحة الدخول مع حفظ المكان الذي كان يريد الذهاب إليه
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (allowedRoles?.length && role && !allowedRoles.includes(role)) {
+    const home = ROLE_HOME[role] || '/';
+    return <Navigate to={home} replace />;
   }
 
   return children;

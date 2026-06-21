@@ -12,6 +12,7 @@ import {
 import { db, auth } from '../../firebase/config';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { useSettings } from '../../context/SettingsContext';
+import { usePharmacy } from '../../context/PharmacyContext';
 
 /* ══════════════════════════════════════════
    ANIMATED COUNTER
@@ -217,6 +218,7 @@ const QuickAction = ({ icon: Icon, label, onClick, accent }) => (
 ══════════════════════════════════════════ */
 const PharmacyDashboard = () => {
   const { t, lang } = useSettings();
+  const { stats: salesStats, pendingCount: ctxPending, lowStockCount: ctxLowStock } = usePharmacy();
   const navigate = useNavigate();
   const isRTL = lang === 'ar';
 
@@ -260,7 +262,7 @@ const PharmacyDashboard = () => {
           const d = doc.data();
           const orderDate = d.createdAt?.toDate?.() || new Date();
           if (['pending', 'processing', 'accepted', 'preparing'].includes(d.status)) active++;
-          if (d.status === 'completed' && orderDate >= today) todaySales += Number(d.totalPrice || 0);
+          if (d.status === 'completed' && orderDate >= today) todaySales += Number(d.total ?? d.totalPrice ?? 0);
           if (activities.length < 6)
             activities.push({ id: doc.id, type: 'order', name: (isRTL ? 'طلب #' : 'Order #') + doc.id.slice(0, 5), status: d.status, time: orderDate });
         });
@@ -293,7 +295,7 @@ const PharmacyDashboard = () => {
     cancelled: isRTL ? 'ملغى'    : 'Cancelled',
   }[s] || s);
 
-  const userName = auth?.currentUser?.displayName?.split(' ')[0] || (isRTL ? 'دكتور' : 'Doctor');
+  const userName = auth?.currentUser?.displayName?.split(' ')[0] || (isRTL ? 'صيدلي' : 'Pharmacist');
   const criticalAlert = stats.shortages > 5;
 
   /* ── accent presets ── */
@@ -356,10 +358,10 @@ const PharmacyDashboard = () => {
           {/* Quick actions */}
           <div className="grid grid-cols-4 gap-2 w-full lg:w-auto">
             {[
-              { icon: Package,      label: isRTL ? 'المخزون'  : 'Inventory',  path: '/pharmacy/inventory', accent: 'bg-blue-500/5 border-blue-500/15 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/30' },
-              { icon: ClipboardList, label: isRTL ? 'الطلبات'  : 'Orders',     path: '/pharmacy/orders',    accent: 'bg-emerald-500/5 border-emerald-500/15 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30' },
-              { icon: TrendingUp,   label: isRTL ? 'التقارير' : 'Reports',    path: '/pharmacy/reports',   accent: 'bg-violet-500/5 border-violet-500/15 text-violet-400 hover:bg-violet-500/10 hover:border-violet-500/30' },
-              { icon: Bell,         label: isRTL ? 'التنبيهات': 'Alerts',     path: '/pharmacy/alerts',    accent: `${criticalAlert ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/15' : 'bg-amber-500/5 border-amber-500/15 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/30'}` },
+              { icon: Package,      label: d_t.quickInventory || (isRTL ? 'المخزون'  : 'Inventory'),  path: '/pharmacy/inventory', accent: 'bg-blue-500/5 border-blue-500/15 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/30' },
+              { icon: ShoppingCart, label: d_t.quickSales || (isRTL ? 'المبيعات' : 'Sales'),       path: '/pharmacy/sales',     accent: 'bg-violet-500/5 border-violet-500/15 text-violet-400 hover:bg-violet-500/10 hover:border-violet-500/30' },
+              { icon: ClipboardList, label: d_t.quickOrders || (isRTL ? 'الطلبات'  : 'Orders'),     path: '/pharmacy/orders',    accent: 'bg-emerald-500/5 border-emerald-500/15 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30' },
+              { icon: TrendingUp,   label: d_t.quickReports || (isRTL ? 'التقارير' : 'Reports'),    path: '/pharmacy/reports',   accent: 'bg-amber-500/5 border-amber-500/15 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/30' },
             ].map(a => (
               <QuickAction key={a.path} icon={a.icon} label={a.label} onClick={() => navigate(a.path)} accent={a.accent} />
             ))}
@@ -415,12 +417,12 @@ const PharmacyDashboard = () => {
         />
         <StatCard
           title={d_t.dailySales || (isRTL ? 'مبيعات اليوم' : 'Today Sales')}
-          value={stats.dailySales}
+          value={salesStats.todayRevenue}
           icon={Wallet}
           trend="up" trendLabel="+18%"
           accent={accents.amber} delay={0.20} loading={loading}
           suffix=" EGP"
-          sparkData={[1200, 1800, 1400, 2200, 1900, 2600, stats.dailySales || 2100]}
+          sparkData={[1200, 1800, 1400, 2200, 1900, 2600, salesStats.todayRevenue || 2100]}
         />
       </div>
 

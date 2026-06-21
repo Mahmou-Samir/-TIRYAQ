@@ -40,7 +40,9 @@ const PharmacyProfile = () => {
             email: currentUser.email || '',
             phone: data.phone || '',
             address: data.address || '',
-            license: data.license || 'N/A',
+            license: data.licenseNumber || data.license || 'N/A',
+            governorate: data.governorate || '',
+            verified: data.verified ?? false,
             photoURL: currentUser.photoURL || data.photoURL || ''
           });
         }
